@@ -204,9 +204,9 @@ where
         child: impl Into<Element<'a, Message, Theme, Renderer>>,
     ) -> Self {
         let child = child.into();
-        let child_size = child.as_widget().size();
+        let child_widget = child.as_widget();
 
-        if !child_size.is_void() {
+        if !child_widget.is_void() {
             self.children.push(child);
         }
 
