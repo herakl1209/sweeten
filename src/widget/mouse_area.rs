@@ -540,7 +540,7 @@ fn update<Message, Theme, Renderer>(
                 shell.publish(on_middle_release(position, state.modifiers));
             }
         }
-        Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
+        Event::Mouse(mouse::Event::WheelScrolled { delta, .. }) => {
             if let Some(on_scroll) = widget.on_scroll.as_ref() {
                 shell.publish(on_scroll(*delta));
                 shell.capture_event();

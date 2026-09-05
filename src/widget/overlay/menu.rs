@@ -742,7 +742,7 @@ where
         let over_bottom = cursor.is_over(bottom_strip);
 
         match event {
-            Event::Mouse(mouse::Event::ButtonPressed(_))
+            Event::Mouse(mouse::Event::ButtonPressed { .. })
             | Event::Touch(touch::Event::FingerPressed { .. })
                 if over_top || over_bottom =>
             {

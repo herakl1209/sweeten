@@ -211,10 +211,10 @@ impl App {
             && self.password.error().is_none()
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    fn view<'a>(&'a self) -> Element<'a, Message> {
         let valid = self.form_is_valid();
 
-        let create_field_view = |input: &Input| {
+        let create_field_view = |input: &'a Input| {
             let field = input.field();
             let value = input.value();
             let is_focused = self.focused == Some(FocusedElement::Field(field));

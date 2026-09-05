@@ -913,7 +913,7 @@ mod tests {
         let viewport = Rectangle::with_size(Size::new(1024.0, 768.0));
         let waker = core::shell::Waker::noop();
         let window = crate::core::window::Headless;
-        let mut messages: Vec<Never> = vec![];
+        let mut messages = crate::core::shell::Bus::<Never>::new();
         let mut shell = Shell::new(&window, waker, &mut messages);
 
         widget.update(

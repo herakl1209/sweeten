@@ -2,6 +2,7 @@
 
 use crate::core;
 use crate::core::Element;
+use crate::core::text;
 use crate::overlay::menu;
 use crate::widget::MouseArea;
 use crate::widget::button::{self, Button};
@@ -95,8 +96,8 @@ where
 /// [`on_focus`]: TextInput::on_focus
 /// [`on_blur`]: TextInput::on_blur
 pub fn text_input<'a, Message, Theme, Renderer>(
-    placeholder: &str,
-    value: &str,
+    placeholder: impl text::IntoFragment<'a>,
+    value: impl text::IntoFragment<'a>,
 ) -> TextInput<'a, Message, Theme, Renderer>
 where
     Message: Clone,
