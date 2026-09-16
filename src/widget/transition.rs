@@ -712,6 +712,7 @@ where
         &mut self,
         tree: &mut Tree,
         layout: Layout<'_>,
+        viewport: &Rectangle,
         renderer: &Renderer,
         operation: &mut dyn Operation,
     ) {
@@ -733,6 +734,7 @@ where
         current_element.as_widget_mut().operate(
             &mut state.current_tree,
             current_layout,
+            viewport,
             renderer,
             operation,
         );
@@ -849,16 +851,21 @@ where
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
-    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
+    ) -> Vec<overlay::Element<'b, Message, Theme, Renderer>> {
         let state = tree.state.downcast_mut::<State<T>>();
         if self.current_element.is_none() {
             self.current_element = Some((self.view)(&state.current_value));
         }
-        let element = self.current_element.as_mut()?;
-        let current_layout = layout
+        let Some(element) = self.current_element.as_mut() else {
+            return vec![];
+        };
+        let Some(current_layout) = layout
             .children()
             .next()
-            .and_then(|wrapper| wrapper.children().next())?;
+            .and_then(|wrapper| wrapper.children().next())
+        else {
+            return vec![];
+        };
         element.as_widget_mut().overlay(
             &mut state.current_tree,
             current_layout,

@@ -32,7 +32,7 @@ fn main() -> iced::Result {
         .title("sweeten • pick_list with groups and disabled items")
         .window_size([400.0, 600.0])
         .settings(iced::Settings {
-            default_text_size: 13.0.into(),
+            text_size: 13.0.into(),
             ..Default::default()
         })
         .theme(App::theme)

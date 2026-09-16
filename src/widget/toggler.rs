@@ -44,7 +44,7 @@ use crate::core::widget;
 use crate::core::widget::tree::{self, Tree};
 use crate::core::window;
 use crate::core::{
-    Animation, Background, Border, Color, Element, Event, Layout, Length,
+    Animation, Background, Border, Color, Element, Event, Font, Layout, Length,
     Pixels, Rectangle, Shell, Size, Theme, Widget,
 };
 
@@ -80,14 +80,9 @@ use crate::core::{
 ///     }
 /// }
 /// ```
-pub struct Toggler<
-    'a,
-    Message,
-    Theme = crate::Theme,
-    Renderer = crate::Renderer,
-> where
+pub struct Toggler<'a, Message, Theme = crate::Theme>
+where
     Theme: Catalog,
-    Renderer: text::Renderer,
 {
     is_toggled: bool,
     on_toggle: Option<Box<dyn Fn(bool) -> Message + 'a>>,
@@ -95,21 +90,20 @@ pub struct Toggler<
     width: Length,
     size: f32,
     text_size: Option<Pixels>,
-    line_height: text::LineHeight,
+    line_height: Option<text::LineHeight>,
     alignment: text::Alignment,
     text_shaping: text::Shaping,
     wrapping: text::Wrapping,
     spacing: f32,
-    font: Option<Renderer::Font>,
+    font: Option<Font>,
     class: Theme::Class<'a>,
     interaction: Option<mouse::Interaction>,
     last_status: Option<Status>,
 }
 
-impl<'a, Message, Theme, Renderer> Toggler<'a, Message, Theme, Renderer>
+impl<'a, Message, Theme> Toggler<'a, Message, Theme>
 where
     Theme: Catalog,
-    Renderer: text::Renderer,
 {
     /// The default size of a [`Toggler`].
     pub const DEFAULT_SIZE: f32 = 16.0;
@@ -130,7 +124,7 @@ where
             width: Length::Shrink,
             size: Self::DEFAULT_SIZE,
             text_size: None,
-            line_height: text::LineHeight::default(),
+            line_height: None,
             alignment: text::Alignment::Default,
             text_shaping: text::Shaping::default(),
             wrapping: text::Wrapping::default(),
@@ -195,7 +189,7 @@ where
         mut self,
         line_height: impl Into<text::LineHeight>,
     ) -> Self {
-        self.line_height = line_height.into();
+        self.line_height = Some(line_height.into());
         self
     }
 
@@ -226,7 +220,7 @@ where
     /// Sets the [`Renderer::Font`] of the text of the [`Toggler`]
     ///
     /// [`Renderer::Font`]: crate::core::text::Renderer
-    pub fn font(mut self, font: impl Into<Renderer::Font>) -> Self {
+    pub fn font(mut self, font: impl Into<Font>) -> Self {
         self.font = Some(font.into());
         self
     }
@@ -267,7 +261,7 @@ struct State<P: text::Paragraph> {
 }
 
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer>
-    for Toggler<'_, Message, Theme, Renderer>
+    for Toggler<'_, Message, Theme>
 where
     Theme: Catalog,
     Renderer: text::Renderer,
@@ -590,7 +584,7 @@ where
     }
 }
 
-impl<'a, Message, Theme, Renderer> From<Toggler<'a, Message, Theme, Renderer>>
+impl<'a, Message, Theme, Renderer> From<Toggler<'a, Message, Theme>>
     for Element<'a, Message, Theme, Renderer>
 where
     Message: 'a,
@@ -598,7 +592,7 @@ where
     Renderer: text::Renderer + 'a,
 {
     fn from(
-        toggler: Toggler<'a, Message, Theme, Renderer>,
+        toggler: Toggler<'a, Message, Theme>,
     ) -> Element<'a, Message, Theme, Renderer> {
         Element::new(toggler)
     }

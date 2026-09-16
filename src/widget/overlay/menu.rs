@@ -15,7 +15,7 @@ use crate::core::widget::operation;
 use crate::core::widget::tree::{self, Tree};
 use crate::core::window;
 use crate::core::{
-    Background, Color, Event, Length, Padding, Pixels, Point, Rectangle,
+    Background, Color, Event, Font, Length, Padding, Pixels, Point, Rectangle,
     Shadow, Size, Theme,
 };
 use crate::core::{Element, Shell, Widget};
@@ -77,10 +77,10 @@ pub struct Menu<
     target_radius: Option<border::Radius>,
     padding: Padding,
     text_size: Option<Pixels>,
-    line_height: text::LineHeight,
+    line_height: Option<text::LineHeight>,
     shaping: text::Shaping,
     ellipsis: text::Ellipsis,
-    font: Option<Renderer::Font>,
+    font: Option<Font>,
     class: &'a <Theme as Catalog>::Class<'b>,
 }
 
@@ -133,7 +133,7 @@ where
             target_radius: None,
             padding: Padding::ZERO,
             text_size: None,
-            line_height: text::LineHeight::default(),
+            line_height: None,
             shaping: text::Shaping::default(),
             ellipsis: text::Ellipsis::default(),
             font: None,
@@ -225,7 +225,7 @@ where
         mut self,
         line_height: impl Into<text::LineHeight>,
     ) -> Self {
-        self.line_height = line_height.into();
+        self.line_height = Some(line_height.into());
         self
     }
 
@@ -242,7 +242,7 @@ where
     }
 
     /// Sets the font of the [`Menu`].
-    pub fn font(mut self, font: impl Into<Renderer::Font>) -> Self {
+    pub fn font(mut self, font: impl Into<Font>) -> Self {
         self.font = Some(font.into());
         self
     }
@@ -720,6 +720,7 @@ where
             self.list.operate(
                 self.tree,
                 list_layout,
+                &self.viewport,
                 renderer,
                 &mut operation::scrollable::scroll_to::<()>(
                     self.id.clone(),
@@ -787,6 +788,7 @@ where
                     self.list.operate(
                         self.tree,
                         list_layout,
+                        &self.viewport,
                         renderer,
                         &mut operation::scrollable::scroll_to::<()>(
                             self.id.clone(),
@@ -951,10 +953,10 @@ where
     target_radius: Option<border::Radius>,
     padding: Padding,
     text_size: Option<Pixels>,
-    line_height: text::LineHeight,
+    line_height: Option<text::LineHeight>,
     shaping: text::Shaping,
     ellipsis: text::Ellipsis,
-    font: Option<Renderer::Font>,
+    font: Option<Font>,
     class: &'a <Theme as Catalog>::Class<'b>,
 }
 
@@ -1102,16 +1104,16 @@ where
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        let text_size =
-            self.text_size.unwrap_or_else(|| renderer.default_size());
+        let text_size = self.text_size.unwrap_or_else(|| renderer.text_size());
         let label_text_size = Pixels(text_size.0 * LABEL_TEXT_RATIO);
-        let font = self.font.unwrap_or_else(|| renderer.default_font());
+        let font = self.font.unwrap_or_else(|| renderer.font());
+        let line_height =
+            self.line_height.unwrap_or_else(|| renderer.line_height());
 
-        let option_height = f32::from(self.line_height.to_absolute(text_size))
+        let option_height =
+            f32::from(line_height.to_absolute(text_size)) + self.padding.y();
+        let label_height = f32::from(line_height.to_absolute(label_text_size))
             + self.padding.y();
-        let label_height =
-            f32::from(self.line_height.to_absolute(label_text_size))
-                + self.padding.y();
 
         let gutter = if self.check_indicator {
             text_size.0 * 1.5
@@ -1141,7 +1143,6 @@ where
 
         let max_width = match self.width {
             Length::Shrink | Length::Fit => {
-                let line_height = self.line_height;
                 let shaping = self.shaping;
                 let ellipsis = self.ellipsis;
 
@@ -1475,10 +1476,11 @@ where
     ) {
         let style = Catalog::style(theme, self.class);
 
-        let text_size =
-            self.text_size.unwrap_or_else(|| renderer.default_size());
+        let text_size = self.text_size.unwrap_or_else(|| renderer.text_size());
         let label_text_size = Pixels(text_size.0 * LABEL_TEXT_RATIO);
-        let font = self.font.unwrap_or_else(|| renderer.default_font());
+        let font = self.font.unwrap_or_else(|| renderer.font());
+        let line_height =
+            self.line_height.unwrap_or_else(|| renderer.line_height());
 
         let gutter = if self.check_indicator {
             text_size.0 * 1.5
@@ -1566,10 +1568,10 @@ where
                         content: Renderer::CHECKMARK_ICON.to_string(),
                         font: Renderer::ICON_FONT,
                         size: check_size,
-                        line_height: self.line_height,
+                        line_height,
                         bounds: Size::new(
                             bounds.width,
-                            f32::from(self.line_height.to_absolute(check_size)),
+                            f32::from(line_height.to_absolute(check_size)),
                         ),
                         align_x: text::Alignment::Right,
                         align_y: alignment::Vertical::Center,
@@ -1597,7 +1599,7 @@ where
                                 bounds.height,
                             ),
                             size: text_size,
-                            line_height: self.line_height,
+                            line_height,
                             font,
                             align_x: text::Alignment::Default,
                             align_y: alignment::Vertical::Center,
@@ -1620,7 +1622,7 @@ where
                                 bounds.height,
                             ),
                             size: label_text_size,
-                            line_height: self.line_height,
+                            line_height,
                             font,
                             align_x: text::Alignment::Default,
                             align_y: alignment::Vertical::Center,

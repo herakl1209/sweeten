@@ -587,12 +587,13 @@ where
         &mut self,
         tree: &mut Tree,
         layout: Layout<'_>,
+        viewport: &Rectangle,
         renderer: &Renderer,
         operation: &mut dyn Operation,
     ) {
         let id = self.id.as_ref().map(|id| &id.0);
 
-        operation.container(id, layout.bounds());
+        operation.container(id, layout.bounds(), viewport);
         operation.traverse(&mut |operation| {
             self.children
                 .iter_mut()
@@ -601,7 +602,7 @@ where
                 .for_each(|((child, state), layout)| {
                     child
                         .as_widget_mut()
-                        .operate(state, layout, renderer, operation);
+                        .operate(state, layout, viewport, renderer, operation);
                 });
         });
 
@@ -1185,7 +1186,7 @@ where
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
-    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
+    ) -> Vec<overlay::Element<'b, Message, Theme, Renderer>> {
         overlay::from_children(
             &mut self.children,
             tree,
@@ -1415,10 +1416,12 @@ where
         &mut self,
         tree: &mut Tree,
         layout: Layout<'_>,
+        viewport: &Rectangle,
         renderer: &Renderer,
         operation: &mut dyn Operation,
     ) {
-        self.row.operate(tree, layout, renderer, operation);
+        self.row
+            .operate(tree, layout, viewport, renderer, operation);
     }
 
     fn update(
@@ -1468,7 +1471,7 @@ where
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
-    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
+    ) -> Vec<overlay::Element<'b, Message, Theme, Renderer>> {
         self.row
             .overlay(tree, layout, renderer, viewport, translation)
     }

@@ -59,14 +59,13 @@ where
 /// callers want the focus-managing [`Group`] that [`radio`] builds. The
 /// returned [`Single`] is disabled until
 /// [`on_toggle`](Single::on_toggle) is called.
-pub fn single<'a, V, Message, Theme, Renderer>(
+pub fn single<'a, V, Message, Theme>(
     value: V,
     selected: Option<V>,
-) -> Single<'a, V, Message, Theme, Renderer>
+) -> Single<'a, V, Message, Theme>
 where
     V: Eq,
     Theme: Catalog + 'a,
-    Renderer: text::Renderer,
 {
     Single::new(value, selected)
 }

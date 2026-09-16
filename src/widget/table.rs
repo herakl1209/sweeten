@@ -1124,6 +1124,7 @@ where
         &mut self,
         tree: &mut widget::Tree,
         layout: Layout<'_>,
+        viewport: &Rectangle,
         renderer: &Renderer,
         operation: &mut dyn widget::Operation,
     ) {
@@ -1134,7 +1135,7 @@ where
             .zip(layout.children())
         {
             cell.as_widget_mut()
-                .operate(state, layout, renderer, operation);
+                .operate(state, layout, viewport, renderer, operation);
         }
     }
 
@@ -1145,7 +1146,7 @@ where
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: core::Vector,
-    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
+    ) -> Vec<overlay::Element<'b, Message, Theme, Renderer>> {
         overlay::from_children(
             &mut self.cells,
             tree,

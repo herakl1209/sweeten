@@ -27,7 +27,7 @@ fn main() -> iced::Result {
         .theme(|app: &App| app.theme.clone())
         .window_size((520.0, 500.0))
         .settings(iced::Settings {
-            default_text_size: 13.0.into(),
+            text_size: 13.0.into(),
             ..Default::default()
         })
         .run()

@@ -95,14 +95,13 @@ where
 /// [`iced`'s `text_input`]: https://docs.iced.rs/iced/widget/text_input/index.html
 /// [`on_focus`]: TextInput::on_focus
 /// [`on_blur`]: TextInput::on_blur
-pub fn text_input<'a, Message, Theme, Renderer>(
+pub fn text_input<'a, Message, Theme>(
     placeholder: impl text::IntoFragment<'a>,
     value: impl text::IntoFragment<'a>,
-) -> TextInput<'a, Message, Theme, Renderer>
+) -> TextInput<'a, Message, Theme>
 where
     Message: Clone,
     Theme: text_input::Catalog + 'a,
-    Renderer: core::text::Renderer,
 {
     TextInput::new(placeholder, value)
 }
@@ -237,12 +236,11 @@ where
 /// animation when toggling between states.
 ///
 /// [`iced`'s `toggler`]: https://docs.iced.rs/iced/widget/toggler/index.html
-pub fn toggler<'a, Message, Theme, Renderer>(
+pub fn toggler<'a, Message, Theme>(
     is_toggled: bool,
-) -> Toggler<'a, Message, Theme, Renderer>
+) -> Toggler<'a, Message, Theme>
 where
     Theme: toggler::Catalog,
-    Renderer: core::text::Renderer,
 {
     Toggler::new(is_toggled)
 }
@@ -272,12 +270,11 @@ where
 /// [`FitText`] scales its font size to fit the bounds it is laid out into,
 /// up to a configurable ceiling. See the [`fit_text`](mod@crate::widget::fit_text)
 /// module docs for the semantics.
-pub fn fit_text<'a, Theme, Renderer>(
+pub fn fit_text<'a, Theme>(
     content: impl core::text::IntoFragment<'a>,
-) -> FitText<'a, Theme, Renderer>
+) -> FitText<'a, Theme>
 where
     Theme: fit_text::Catalog,
-    Renderer: core::text::Renderer,
 {
     FitText::new(content)
 }

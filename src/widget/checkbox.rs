@@ -32,6 +32,8 @@
 //! }
 //! ```
 //! ![Checkbox drawn by `iced_wgpu`](https://github.com/iced-rs/iced/blob/7760618fb112074bc40b148944521f312152012a/docs/images/checkbox.png?raw=true)
+use std::marker::PhantomData;
+
 use crate::animation::cubic_bezier;
 use crate::core::alignment;
 use crate::core::animation::Easing;
@@ -48,7 +50,7 @@ use crate::core::widget::operation;
 use crate::core::widget::tree::{self, Tree};
 use crate::core::window;
 use crate::core::{
-    Animation, Background, Border, Color, Element, Event, Layout, Length,
+    Animation, Background, Border, Color, Element, Event, Font, Layout, Length,
     Pixels, Rectangle, Shell, Size, Theme, Widget,
 };
 use crate::widget::focus;
@@ -93,8 +95,8 @@ pub struct Checkbox<
     Theme = crate::Theme,
     Renderer = crate::Renderer,
 > where
-    Renderer: text::Renderer,
     Theme: Catalog,
+    Renderer: text::Renderer,
 {
     is_checked: bool,
     on_toggle: Option<Box<dyn Fn(bool) -> Message + 'a>>,
@@ -106,19 +108,20 @@ pub struct Checkbox<
     size: f32,
     gap: f32,
     text_size: Option<Pixels>,
-    line_height: text::LineHeight,
+    line_height: Option<text::LineHeight>,
     shaping: text::Shaping,
     wrapping: text::Wrapping,
-    font: Option<Renderer::Font>,
-    icon: Icon<Renderer::Font>,
+    font: Option<Font>,
+    icon: Icon<Font>,
     class: Theme::Class<'a>,
     last_status: Option<Status>,
+    renderer_: PhantomData<Renderer>,
 }
 
 impl<'a, Message, Theme, Renderer> Checkbox<'a, Message, Theme, Renderer>
 where
-    Renderer: text::Renderer,
     Theme: Catalog,
+    Renderer: text::Renderer,
 {
     /// The default size of a [`Checkbox`].
     const DEFAULT_SIZE: f32 = 16.0;
@@ -142,7 +145,7 @@ where
             size: Self::DEFAULT_SIZE,
             gap: Self::DEFAULT_GAP,
             text_size: None,
-            line_height: text::LineHeight::default(),
+            line_height: None,
             shaping: text::Shaping::default(),
             wrapping: text::Wrapping::default(),
             font: None,
@@ -155,6 +158,7 @@ where
             },
             class: Theme::default(),
             last_status: None,
+            renderer_: PhantomData,
         }
     }
 
@@ -236,7 +240,7 @@ where
         mut self,
         line_height: impl Into<text::LineHeight>,
     ) -> Self {
-        self.line_height = line_height.into();
+        self.line_height = Some(line_height.into());
         self
     }
 
@@ -255,13 +259,13 @@ where
     /// Sets the [`Renderer::Font`] of the text of the [`Checkbox`].
     ///
     /// [`Renderer::Font`]: crate::core::text::Renderer
-    pub fn font(mut self, font: impl Into<Renderer::Font>) -> Self {
+    pub fn font(mut self, font: impl Into<Font>) -> Self {
         self.font = Some(font.into());
         self
     }
 
     /// Sets the [`Icon`] of the [`Checkbox`].
-    pub fn icon(mut self, icon: Icon<Renderer::Font>) -> Self {
+    pub fn icon(mut self, icon: Icon<Font>) -> Self {
         self.icon = icon;
         self
     }
@@ -718,6 +722,7 @@ where
         &mut self,
         tree: &mut Tree,
         layout: Layout<'_>,
+        _viewport: &Rectangle,
         _renderer: &Renderer,
         operation: &mut dyn widget::Operation,
     ) {

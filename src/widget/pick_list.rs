@@ -130,8 +130,8 @@ use crate::core::widget::operation;
 use crate::core::widget::tree::{self, Tree};
 use crate::core::window;
 use crate::core::{
-    Background, Border, Color, Element, Event, Layout, Length, Padding, Pixels,
-    Point, Rectangle, Shell, Size, Theme, Vector, Widget,
+    Background, Border, Color, Element, Event, Font, Layout, Length, Padding,
+    Pixels, Point, Rectangle, Shell, Size, Theme, Vector, Widget,
 };
 use crate::overlay::menu::{self, Menu};
 
@@ -238,8 +238,8 @@ pub struct PickList<
     line_height: text::LineHeight,
     shaping: text::Shaping,
     ellipsis: text::Ellipsis,
-    font: Option<Renderer::Font>,
-    handle: Handle<Renderer::Font>,
+    font: Option<Font>,
+    handle: Handle<Font>,
     class: <Theme as Catalog>::Class<'a>,
     menu_class: <Theme as menu::Catalog>::Class<'a>,
     last_status: Option<Status>,
@@ -458,13 +458,13 @@ where
     }
 
     /// Sets the font of the [`PickList`].
-    pub fn font(mut self, font: impl Into<Renderer::Font>) -> Self {
+    pub fn font(mut self, font: impl Into<Font>) -> Self {
         self.font = Some(font.into());
         self
     }
 
     /// Sets the [`Handle`] of the [`PickList`].
-    pub fn handle(mut self, handle: Handle<Renderer::Font>) -> Self {
+    pub fn handle(mut self, handle: Handle<Font>) -> Self {
         self.handle = handle;
         self
     }
@@ -617,9 +617,8 @@ where
     ) -> layout::Node {
         let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
 
-        let font = self.font.unwrap_or_else(|| renderer.default_font());
-        let text_size =
-            self.text_size.unwrap_or_else(|| renderer.default_size());
+        let font = self.font.unwrap_or_else(|| renderer.font());
+        let text_size = self.text_size.unwrap_or_else(|| renderer.text_size());
 
         let option_text = Text {
             content: "",
@@ -767,6 +766,7 @@ where
         &mut self,
         tree: &mut Tree,
         layout: Layout<'_>,
+        _viewport: &Rectangle,
         _renderer: &Renderer,
         operation: &mut dyn Operation,
     ) {
@@ -1006,7 +1006,7 @@ where
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        let font = self.font.unwrap_or_else(|| renderer.default_font());
+        let font = self.font.unwrap_or_else(|| renderer.font());
         let state = tree.state.downcast_ref::<State<Renderer::Paragraph>>();
 
         let bounds = layout.bounds();
@@ -1069,7 +1069,7 @@ where
         };
 
         if let Some((font, code_point, size, line_height, shaping)) = handle {
-            let size = size.unwrap_or_else(|| renderer.default_size());
+            let size = size.unwrap_or_else(|| renderer.text_size());
 
             renderer.fill_text(
                 Text {
@@ -1124,7 +1124,7 @@ where
             }
             Some(Content::Text(label)) => {
                 let text_size =
-                    self.text_size.unwrap_or_else(|| renderer.default_size());
+                    self.text_size.unwrap_or_else(|| renderer.text_size());
 
                 renderer.fill_text(
                     Text {
@@ -1163,13 +1163,13 @@ where
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
-    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
+    ) -> Vec<overlay::Element<'b, Message, Theme, Renderer>> {
         let Some(on_select) = &self.on_select else {
-            return None;
+            return vec![];
         };
 
         let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
-        let font = self.font.unwrap_or_else(|| renderer.default_font());
+        let font = self.font.unwrap_or_else(|| renderer.font());
 
         if state.is_open {
             let bounds = layout.bounds();
@@ -1240,14 +1240,14 @@ where
                 menu = menu.target_radius(radius);
             }
 
-            Some(menu.overlay(
+            vec![menu.overlay(
                 layout.position() + translation,
                 *viewport,
                 bounds.height,
                 self.menu_height,
-            ))
+            )]
         } else {
-            None
+            Vec::new()
         }
     }
 }

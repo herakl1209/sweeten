@@ -58,8 +58,8 @@ use crate::core::widget;
 use crate::core::widget::tree::{self, Tree};
 use crate::core::window;
 use crate::core::{
-    Animation, Element, Event, Layout, Length, Pixels, Rectangle, Shell, Size,
-    Widget,
+    Animation, Element, Event, Font, Layout, Length, Pixels, Rectangle, Shell,
+    Size, Widget,
 };
 
 use super::dot;
@@ -78,15 +78,9 @@ use super::style::{Catalog, Status, Style, StyleFn};
 ///
 /// [`iced`'s `radio`]: https://docs.iced.rs/iced/widget/radio/index.html
 /// [`on_toggle`]: Single::on_toggle
-pub struct Single<
-    'a,
-    V,
-    Message,
-    Theme = crate::Theme,
-    Renderer = crate::Renderer,
-> where
+pub struct Single<'a, V, Message, Theme = crate::Theme>
+where
     Theme: Catalog,
-    Renderer: text::Renderer,
 {
     value: V,
     is_selected: bool,
@@ -96,18 +90,17 @@ pub struct Single<
     size: f32,
     gap: f32,
     text_size: Option<Pixels>,
-    line_height: text::LineHeight,
+    line_height: Option<text::LineHeight>,
     shaping: text::Shaping,
     wrapping: text::Wrapping,
-    font: Option<Renderer::Font>,
+    font: Option<Font>,
     class: Theme::Class<'a>,
     last_status: Option<Status>,
 }
 
-impl<'a, V, Message, Theme, Renderer> Single<'a, V, Message, Theme, Renderer>
+impl<'a, V, Message, Theme> Single<'a, V, Message, Theme>
 where
     Theme: Catalog,
-    Renderer: text::Renderer,
 {
     /// The default size of a [`Single`] radio button.
     pub const DEFAULT_SIZE: f32 = 16.0;
@@ -136,7 +129,7 @@ where
             size: Self::DEFAULT_SIZE,
             gap: Self::DEFAULT_GAP,
             text_size: None,
-            line_height: text::LineHeight::default(),
+            line_height: None,
             shaping: text::Shaping::default(),
             wrapping: text::Wrapping::default(),
             font: None,
@@ -205,7 +198,7 @@ where
         mut self,
         line_height: impl Into<text::LineHeight>,
     ) -> Self {
-        self.line_height = line_height.into();
+        self.line_height = Some(line_height.into());
         self
     }
 
@@ -222,7 +215,7 @@ where
     }
 
     /// Sets the text font of the [`Single`] radio button.
-    pub fn font(mut self, font: impl Into<Renderer::Font>) -> Self {
+    pub fn font(mut self, font: impl Into<Font>) -> Self {
         self.font = Some(font.into());
         self
     }
@@ -261,7 +254,7 @@ struct State<P: text::Paragraph> {
 }
 
 impl<V, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
-    for Single<'_, V, Message, Theme, Renderer>
+    for Single<'_, V, Message, Theme>
 where
     V: Clone,
     Theme: Catalog,
@@ -502,6 +495,7 @@ where
         &mut self,
         _tree: &mut Tree,
         layout: Layout<'_>,
+        _viewport: &Rectangle,
         _renderer: &Renderer,
         operation: &mut dyn widget::Operation,
     ) {
@@ -511,8 +505,7 @@ where
     }
 }
 
-impl<'a, V, Message, Theme, Renderer>
-    From<Single<'a, V, Message, Theme, Renderer>>
+impl<'a, V, Message, Theme, Renderer> From<Single<'a, V, Message, Theme>>
     for Element<'a, Message, Theme, Renderer>
 where
     V: 'a + Clone,
@@ -521,7 +514,7 @@ where
     Renderer: 'a + text::Renderer,
 {
     fn from(
-        radio: Single<'a, V, Message, Theme, Renderer>,
+        radio: Single<'a, V, Message, Theme>,
     ) -> Element<'a, Message, Theme, Renderer> {
         Element::new(radio)
     }

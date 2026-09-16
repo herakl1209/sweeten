@@ -12,6 +12,7 @@
 use iced::widget::{center, column, container, markdown, row, sensor, text};
 use iced::{Center, Element, Fill, Task, Theme};
 
+use iced_widget::markdown::Catalog;
 use sweeten::widget::{button, text_input, transition, transition::Direction};
 
 fn main() -> iced::Result {
@@ -112,9 +113,13 @@ impl App {
             .spacing(15)
             .align_y(Center)
             .into(),
-            3 => {
-                markdown::view_with(self.markdown.items(), &self.theme, &Viewer)
-            }
+            3 => markdown::view_with(
+                self.markdown.items(),
+                markdown::Settings::default(),
+                &Viewer {
+                    theme: self.theme.clone(),
+                },
+            ),
             _ => sensor(
                 text_input(
                     "Type anything—but preferably a pangram.",
@@ -180,10 +185,20 @@ fn direction_btn<'a>(
         .into()
 }
 
-struct Viewer;
+struct Viewer {
+    theme: Theme,
+}
 
 impl<'a> markdown::Viewer<'a, Message> for Viewer {
     fn on_link_click(_url: markdown::Uri) -> Message {
         Message::LinkClicked
+    }
+
+    fn theme(&self) -> &Theme {
+        &self.theme
+    }
+
+    fn highlighter(&self) -> &dyn text::Highlighter<iced::Code, Theme> {
+        self.theme.highlighter()
     }
 }

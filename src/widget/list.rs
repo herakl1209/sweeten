@@ -621,6 +621,7 @@ where
         &mut self,
         tree: &mut Tree,
         layout: Layout<'_>,
+        viewport: &Rectangle,
         renderer: &Renderer,
         operation: &mut dyn widget::Operation,
     ) {
@@ -635,6 +636,7 @@ where
             element.as_widget_mut().operate(
                 tree,
                 Layout::with_offset(offset, layout),
+                viewport,
                 renderer,
                 operation,
             );
@@ -648,15 +650,14 @@ where
         renderer: &Renderer,
         _viewport: &Rectangle,
         translation: Vector,
-    ) -> Option<overlay::Element<'b, Message, Theme, Renderer>> {
+    ) -> Vec<overlay::Element<'b, Message, Theme, Renderer>> {
         let state = tree.state.downcast_mut::<State>();
         let offset = layout.position() - Point::ORIGIN;
 
-        let children = self
-            .visible_elements
+        self.visible_elements
             .iter_mut()
             .zip(&mut state.visible_layouts)
-            .filter_map(|(child, (_item, layout, tree))| {
+            .map(|(child, (_item, layout, tree))| {
                 child.as_widget_mut().overlay(
                     tree,
                     Layout::with_offset(offset, layout),
@@ -665,10 +666,8 @@ where
                     translation,
                 )
             })
-            .collect::<Vec<_>>();
-
-        (!children.is_empty())
-            .then(|| overlay::Group::with_children(children).overlay())
+            .flatten()
+            .collect()
     }
 }
 
