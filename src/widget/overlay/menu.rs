@@ -620,10 +620,10 @@ where
 
         let node = if strips > 0.0 {
             let limits = layout::Limits::new(
-                limits.min(),
+                limits.min,
                 Size::new(
-                    limits.max().width,
-                    (limits.max().height - strips).max(0.0),
+                    limits.max.width,
+                    (limits.max.height - strips).max(0.0),
                 ),
             );
 
@@ -1170,7 +1170,7 @@ where
                 let widest = self.rows.iter_mut().zip(&mut tree.children).fold(
                     0.0f32,
                     |widest, (row, tree)| {
-                        let loose = limits.max().width
+                        let loose = limits.max.width
                             - self.menu_padding.x()
                             - inset.x()
                             - gutter;
@@ -1200,9 +1200,9 @@ where
                 );
 
                 (widest + self.menu_padding.x() + inset.x() + gutter)
-                    .clamp(limits.min().width, limits.max().width)
+                    .clamp(limits.min.width, limits.max.width)
             }
-            _ => limits.max().width,
+            _ => limits.max.width,
         };
 
         let row_width = max_width - self.menu_padding.x();
@@ -1253,7 +1253,7 @@ where
         layout::Node::with_children(
             Size::new(
                 max_width,
-                (height + self.menu_padding.bottom).min(limits.max().height),
+                (height + self.menu_padding.bottom).min(limits.max.height),
             ),
             nodes,
         )

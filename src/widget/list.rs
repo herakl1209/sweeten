@@ -115,7 +115,7 @@ where
 
     fn state(&self) -> tree::State {
         tree::State::new(State {
-            last_limits: layout::Limits::NONE,
+            last_limits: layout::Limits::new(Size::ZERO, Size::ZERO),
             visible_layouts: Vec::new(),
             size: Size::ZERO,
             offsets: vec![0.0],

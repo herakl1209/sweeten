@@ -327,8 +327,8 @@ where
         let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
 
         layout::sized(limits, self.format.width, self.format.height, |limits| {
-            let bounds = limits.max();
-            let compression = limits.compression();
+            let bounds = limits.max;
+            let compression = limits.compression;
 
             // A Shrink axis has no meaningful "fit bound"; leave it
             // unconstrained so the text can grow to max_size there.

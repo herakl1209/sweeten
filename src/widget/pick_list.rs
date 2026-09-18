@@ -712,11 +712,9 @@ where
             let child_limits = layout::Limits::new(
                 Size::ZERO,
                 Size::new(
-                    (content_limits.max().width
-                        - allowance
-                        - self.padding.left)
+                    (content_limits.max.width - allowance - self.padding.left)
                         .max(0.0),
-                    content_limits.max().height,
+                    content_limits.max.height,
                 ),
             );
 
