@@ -614,7 +614,7 @@ where
         tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
-    ) -> layout::Node {
+    ) {
         let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
 
         let font = self.font.unwrap_or_else(|| renderer.font());
@@ -718,12 +718,12 @@ where
                 ),
             );
 
-            let child_node = element.as_widget_mut().layout(
+            element.as_widget_mut().layout(
                 &mut tree.children[0],
                 renderer,
                 &child_limits,
             );
-            let child_size = child_node.size();
+            let child_size = tree.children[0].size;
 
             let intrinsic = Size::new(
                 max_width.max(child_size.width) + allowance + self.padding.left,
@@ -736,12 +736,12 @@ where
                 .resolve(self.width, Length::Shrink, intrinsic)
                 .expand(self.padding);
 
-            let child_node = child_node.move_to(Point::new(
+            tree.children[0].translation = Vector::new(
                 self.padding.left,
                 (size.height - child_size.height) / 2.0,
-            ));
+            );
 
-            layout::Node::with_children(size, vec![child_node])
+            tree.size = size;
         } else {
             let size = {
                 let intrinsic = Size::new(
@@ -756,14 +756,14 @@ where
                     .expand(self.padding)
             };
 
-            layout::Node::new(size)
+            tree.size = size;
         }
     }
 
     fn operate(
         &mut self,
         tree: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         _viewport: &Rectangle,
         _renderer: &Renderer,
         operation: &mut dyn Operation,
@@ -779,7 +779,7 @@ where
         &mut self,
         tree: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         _renderer: &Renderer,
         shell: &mut Shell<'_, Message>,
@@ -975,7 +975,7 @@ where
     fn mouse_interaction(
         &self,
         _tree: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         _viewport: &Rectangle,
         _renderer: &Renderer,
@@ -1000,7 +1000,7 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         _style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
@@ -1100,9 +1100,13 @@ where
 
         match content {
             Some(Content::Element(element)) => {
-                if let (Some(child_layout), Some(child_tree)) =
-                    (layout.children().next(), tree.children.first())
-                {
+                if let (Some(child_layout), Some(child_tree)) = (
+                    layout
+                        .iter(&tree.children)
+                        .next()
+                        .map(|(layout, _)| layout),
+                    tree.children.first(),
+                ) {
                     element.as_widget().draw(
                         child_tree,
                         renderer,
@@ -1157,10 +1161,11 @@ where
     fn overlay<'b>(
         &'b mut self,
         tree: &'b mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
+        window: Size,
     ) -> Vec<overlay::Element<'b, Message, Theme, Renderer>> {
         let Some(on_select) = &self.on_select else {
             return vec![];
@@ -1243,6 +1248,8 @@ where
                 *viewport,
                 bounds.height,
                 self.menu_height,
+                renderer,
+                window,
             )]
         } else {
             Vec::new()
@@ -1947,6 +1954,9 @@ mod tests {
 
     use iced_test::Simulator;
     use iced_test::simulator::click;
+    use std::sync::Mutex;
+
+    static SIMULATOR_LOCK: Mutex<()> = Mutex::new(());
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     enum Fruit {
@@ -1971,6 +1981,7 @@ mod tests {
 
     #[test]
     fn arrow_keys_and_enter_select_an_option() {
+        let _simulator_guard = SIMULATOR_LOCK.lock().unwrap();
         let pick: Pick = PickList::new(
             None::<Fruit>,
             [Fruit::Apple, Fruit::Banana, Fruit::Cherry],
@@ -1993,6 +2004,7 @@ mod tests {
 
     #[test]
     fn keyboard_navigation_skips_titles_and_disabled_options() {
+        let _simulator_guard = SIMULATOR_LOCK.lock().unwrap();
         let pick: Pick = PickList::new(
             None::<Fruit>,
             options![
@@ -2022,6 +2034,7 @@ mod tests {
 
     #[test]
     fn escape_closes_the_menu_without_selecting() {
+        let _simulator_guard = SIMULATOR_LOCK.lock().unwrap();
         let pick: Pick = PickList::new(
             None::<Fruit>,
             [Fruit::Apple, Fruit::Banana],
@@ -2050,6 +2063,7 @@ mod tests {
 
     #[test]
     fn typeahead_highlights_the_first_matching_option() {
+        let _simulator_guard = SIMULATOR_LOCK.lock().unwrap();
         let pick: Pick = PickList::new(
             None::<Fruit>,
             [Fruit::Apple, Fruit::Banana, Fruit::Cherry],
@@ -2070,6 +2084,7 @@ mod tests {
 
     #[test]
     fn focused_pick_list_reopens_with_keyboard() {
+        let _simulator_guard = SIMULATOR_LOCK.lock().unwrap();
         #[derive(Debug, Clone, PartialEq, Eq)]
         enum Message {
             Picked(Fruit),
@@ -2114,6 +2129,7 @@ mod tests {
 
     #[test]
     fn pressing_outside_blurs_and_closes() {
+        let _simulator_guard = SIMULATOR_LOCK.lock().unwrap();
         #[derive(Debug, Clone, PartialEq, Eq)]
         enum Message {
             Picked(Fruit),
@@ -2157,6 +2173,7 @@ mod tests {
 
     #[test]
     fn deselect_entry_clears_the_selection() {
+        let _simulator_guard = SIMULATOR_LOCK.lock().unwrap();
         #[derive(Debug, Clone, PartialEq, Eq)]
         enum Message {
             Picked(Fruit),
@@ -2206,6 +2223,7 @@ mod tests {
 
     #[test]
     fn deselect_entry_is_disabled_without_a_handler() {
+        let _simulator_guard = SIMULATOR_LOCK.lock().unwrap();
         let pick: Pick = PickList::new(
             None::<Fruit>,
             options![deselect("None"), [Fruit::Apple, Fruit::Banana],],
@@ -2227,6 +2245,7 @@ mod tests {
 
     #[test]
     fn element_titles_and_placeholder_are_display_only() {
+        let _simulator_guard = SIMULATOR_LOCK.lock().unwrap();
         let pick: Pick = PickList::new(
             None::<Fruit>,
             options![group(
@@ -2252,6 +2271,7 @@ mod tests {
 
     #[test]
     fn item_aligned_menu_selects_with_keyboard() {
+        let _simulator_guard = SIMULATOR_LOCK.lock().unwrap();
         let pick: Pick = PickList::new(
             Some(Fruit::Banana),
             [Fruit::Apple, Fruit::Banana, Fruit::Cherry],
@@ -2273,6 +2293,7 @@ mod tests {
 
     #[test]
     fn shrunk_menu_still_selects_options() {
+        let _simulator_guard = SIMULATOR_LOCK.lock().unwrap();
         let pick: Pick = PickList::new(
             None::<Fruit>,
             options![
@@ -2299,6 +2320,7 @@ mod tests {
 
     #[test]
     fn keyboard_navigation_scrolls_the_menu() {
+        let _simulator_guard = SIMULATOR_LOCK.lock().unwrap();
         #[derive(Debug, Clone, PartialEq, Eq)]
         enum Message {
             Picked(&'static str),
@@ -2328,6 +2350,7 @@ mod tests {
 
     #[test]
     fn element_content_options_can_be_selected() {
+        let _simulator_guard = SIMULATOR_LOCK.lock().unwrap();
         let pick: Pick = PickList::new(
             None::<Fruit>,
             [Fruit::Apple, Fruit::Banana, Fruit::Cherry],

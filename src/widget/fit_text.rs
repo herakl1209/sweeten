@@ -323,97 +323,102 @@ where
         tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
-    ) -> layout::Node {
+    ) {
         let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
 
-        layout::sized(limits, self.format.width, self.format.height, |limits| {
-            let bounds = limits.max;
-            let compression = limits.compression;
+        tree.size = layout::sized(
+            limits,
+            self.format.width,
+            self.format.height,
+            |limits| {
+                let bounds = limits.max;
+                let compression = limits.compression;
 
-            // A Shrink axis has no meaningful "fit bound"; leave it
-            // unconstrained so the text can grow to max_size there.
-            let fit_bounds = Size::new(
-                if compression.width {
-                    f32::INFINITY
-                } else {
-                    bounds.width
-                },
-                if compression.height {
-                    f32::INFINITY
-                } else {
-                    bounds.height
-                },
-            );
+                // A Shrink axis has no meaningful "fit bound"; leave it
+                // unconstrained so the text can grow to max_size there.
+                let fit_bounds = Size::new(
+                    if compression.width {
+                        f32::INFINITY
+                    } else {
+                        bounds.width
+                    },
+                    if compression.height {
+                        f32::INFINITY
+                    } else {
+                        bounds.height
+                    },
+                );
 
-            let font = self.format.font.unwrap_or_else(|| renderer.font());
-            let line_height = self
-                .format
-                .line_height
-                .unwrap_or_else(|| renderer.line_height());
-            let hint_factor = renderer.hint_factor();
-
-            let min = self.min_size.unwrap_or(DEFAULT_MIN_SIZE);
-            let max = self.max_size.unwrap_or(DEFAULT_MAX_SIZE);
-
-            // Clamp so min <= max even if the user passed them backwards.
-            let min_size = Pixels(min.0.min(max.0));
-            let max_size = Pixels(min.0.max(max.0));
-
-            let probe_key = FitCache {
-                content: self.fragment.to_string(),
-                fit_bounds,
-                font,
-                line_height,
-                shaping: self.format.shaping,
-                wrapping: self.format.wrapping,
-                ellipsis: self.format.ellipsis,
-                hint_factor,
-                min_size,
-                max_size,
-                chosen: Pixels::ZERO, // filled in below
-            };
-
-            let chosen = match &state.cache {
-                Some(cached) if cached.matches(&probe_key) => cached.chosen,
-                _ => {
-                    let chosen = fit::<Renderer::Paragraph>(
-                        &self.fragment,
-                        fit_bounds,
-                        font,
-                        line_height,
-                        min_size,
-                        max_size,
-                        &self.format,
-                        hint_factor,
-                    );
-                    state.cache = Some(FitCache {
-                        chosen,
-                        ..probe_key
-                    });
-                    chosen
-                }
-            };
-
-            // Commit the chosen size into the cached paragraph.
-            let _ = state.paragraph.update(text::Text {
-                content: &self.fragment,
-                bounds,
-                size: chosen,
-                line_height: self
+                let font = self.format.font.unwrap_or_else(|| renderer.font());
+                let line_height = self
                     .format
                     .line_height
-                    .unwrap_or_else(|| renderer.line_height()),
-                font,
-                align_x: self.format.align_x,
-                align_y: self.format.align_y,
-                shaping: self.format.shaping,
-                wrapping: self.format.wrapping,
-                ellipsis: self.format.ellipsis,
-                hint_factor,
-            });
+                    .unwrap_or_else(|| renderer.line_height());
+                let hint_factor = renderer.hint_factor();
 
-            state.paragraph.min_bounds()
-        })
+                let min = self.min_size.unwrap_or(DEFAULT_MIN_SIZE);
+                let max = self.max_size.unwrap_or(DEFAULT_MAX_SIZE);
+
+                // Clamp so min <= max even if the user passed them backwards.
+                let min_size = Pixels(min.0.min(max.0));
+                let max_size = Pixels(min.0.max(max.0));
+
+                let probe_key = FitCache {
+                    content: self.fragment.to_string(),
+                    fit_bounds,
+                    font,
+                    line_height,
+                    shaping: self.format.shaping,
+                    wrapping: self.format.wrapping,
+                    ellipsis: self.format.ellipsis,
+                    hint_factor,
+                    min_size,
+                    max_size,
+                    chosen: Pixels::ZERO, // filled in below
+                };
+
+                let chosen = match &state.cache {
+                    Some(cached) if cached.matches(&probe_key) => cached.chosen,
+                    _ => {
+                        let chosen = fit::<Renderer::Paragraph>(
+                            &self.fragment,
+                            fit_bounds,
+                            font,
+                            line_height,
+                            min_size,
+                            max_size,
+                            &self.format,
+                            hint_factor,
+                        );
+                        state.cache = Some(FitCache {
+                            chosen,
+                            ..probe_key
+                        });
+                        chosen
+                    }
+                };
+
+                // Commit the chosen size into the cached paragraph.
+                let _ = state.paragraph.update(text::Text {
+                    content: &self.fragment,
+                    bounds,
+                    size: chosen,
+                    line_height: self
+                        .format
+                        .line_height
+                        .unwrap_or_else(|| renderer.line_height()),
+                    font,
+                    align_x: self.format.align_x,
+                    align_y: self.format.align_y,
+                    shaping: self.format.shaping,
+                    wrapping: self.format.wrapping,
+                    ellipsis: self.format.ellipsis,
+                    hint_factor,
+                });
+
+                state.paragraph.min_bounds()
+            },
+        );
     }
 
     fn draw(
@@ -422,7 +427,7 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         defaults: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         _cursor_position: mouse::Cursor,
         viewport: &Rectangle,
     ) {
@@ -442,7 +447,7 @@ where
     fn operate(
         &mut self,
         _tree: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         _viewport: &Rectangle,
         _renderer: &Renderer,
         operation: &mut dyn crate::core::widget::Operation,
@@ -453,6 +458,7 @@ where
 
 /// Binary-searches `[min_size, max_size]` for the largest font size whose
 /// shaped paragraph fits inside `fit_bounds`.
+#[allow(clippy::too_many_arguments)]
 fn fit<P: Paragraph>(
     content: &str,
     fit_bounds: Size,

@@ -268,12 +268,15 @@ where
     fn compute_target_index(
         &self,
         cursor_position: Point,
-        layout: Layout<'_>,
+        layout: Layout,
+        children: &[Tree],
     ) -> usize {
         let mut closest_index = 0;
         let mut closest_dist = f32::INFINITY;
 
-        for (i, child_layout) in layout.children().enumerate() {
+        for (i, child_layout) in
+            layout.iter(children).map(|(layout, _)| layout).enumerate()
+        {
             let bounds = child_layout.bounds();
             let center = bounds.center();
             let dist = cursor_position.distance(center);
@@ -392,6 +395,7 @@ impl ItemAnimations {
 struct WidgetState {
     action: Action,
     positions: position::State,
+    flex_cache: layout::flex::Cache,
 }
 
 /// Simulate the layout that would result from reordering items, returning
@@ -510,6 +514,7 @@ where
                 animations,
             },
             positions: position::State::default(),
+            flex_cache: layout::flex::Cache::default(),
         })
     }
 
@@ -548,7 +553,7 @@ where
         tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
-    ) -> layout::Node {
+    ) {
         let action = &mut tree.state.downcast_mut::<WidgetState>().action;
         match action {
             Action::Idle { animations, .. }
@@ -559,7 +564,7 @@ where
             }
         }
 
-        let node = layout::flex::resolve(
+        tree.size = layout::flex::resolve(
             layout::flex::Axis::Horizontal,
             renderer,
             limits,
@@ -568,25 +573,30 @@ where
             self.padding,
             self.spacing,
             self.align,
-            &mut self.children,
             &mut tree.children,
+            &mut self.children,
+            &mut tree.state.downcast_mut::<WidgetState>().flex_cache,
         );
 
         if self.id.is_some() {
             let state = tree.state.downcast_mut::<WidgetState>();
             state.positions.clear();
-            for (i, child) in node.children().iter().enumerate() {
-                state.positions.set(i, child.bounds());
+            for (i, child) in tree.children.iter().enumerate() {
+                state.positions.set(
+                    i,
+                    Rectangle::new(
+                        Point::ORIGIN + child.translation,
+                        child.size,
+                    ),
+                );
             }
         }
-
-        node
     }
 
     fn operate(
         &mut self,
         tree: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         viewport: &Rectangle,
         renderer: &Renderer,
         operation: &mut dyn Operation,
@@ -597,9 +607,8 @@ where
         operation.traverse(&mut |operation| {
             self.children
                 .iter_mut()
-                .zip(&mut tree.children)
-                .zip(layout.children())
-                .for_each(|((child, state), layout)| {
+                .zip(layout.iter_mut(&mut tree.children))
+                .for_each(|(child, (layout, state))| {
                     child
                         .as_widget_mut()
                         .operate(state, layout, viewport, renderer, operation);
@@ -616,7 +625,7 @@ where
         &mut self,
         tree: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         renderer: &Renderer,
         shell: &mut Shell<'_, Message>,
@@ -624,11 +633,10 @@ where
     ) {
         let action = &mut tree.state.downcast_mut::<WidgetState>().action;
 
-        for ((child, state), layout) in self
+        for (child, (layout, state)) in self
             .children
             .iter_mut()
-            .zip(&mut tree.children)
-            .zip(layout.children())
+            .zip(layout.iter_mut(&mut tree.children))
         {
             let cursor = if matches!(action, Action::Dragging { .. }) {
                 cursor.levitate()
@@ -681,8 +689,11 @@ where
                     };
                     animations.zero();
 
-                    let index =
-                        self.compute_target_index(cursor_position, layout);
+                    let index = self.compute_target_index(
+                        cursor_position,
+                        layout,
+                        &tree.children,
+                    );
 
                     *action = Action::Picking {
                         index,
@@ -741,11 +752,17 @@ where
                     if let Some(cursor_position) = cursor.position() {
                         animations.with_capacity(self.children.len());
 
-                        let target_index =
-                            self.compute_target_index(cursor_position, layout);
+                        let target_index = self.compute_target_index(
+                            cursor_position,
+                            layout,
+                            &tree.children,
+                        );
 
-                        let child_bounds: Vec<Rectangle> =
-                            layout.children().map(|l| l.bounds()).collect();
+                        let child_bounds: Vec<Rectangle> = layout
+                            .iter(&tree.children)
+                            .map(|(layout, _)| layout)
+                            .map(|l| l.bounds())
+                            .collect();
 
                         let start = layout.bounds().position()
                             + Vector::new(self.padding.left, self.padding.top);
@@ -826,11 +843,17 @@ where
                         let cursor = cursor.land();
 
                         if let Some(cursor_position) = cursor.position() {
-                            let target_index = self
-                                .compute_target_index(cursor_position, layout);
+                            let target_index = self.compute_target_index(
+                                cursor_position,
+                                layout,
+                                &tree.children,
+                            );
 
-                            let child_bounds: Vec<Rectangle> =
-                                layout.children().map(|l| l.bounds()).collect();
+                            let child_bounds: Vec<Rectangle> = layout
+                                .iter(&tree.children)
+                                .map(|(layout, _)| layout)
+                                .map(|l| l.bounds())
+                                .collect();
 
                             let start = layout.bounds().position()
                                 + Vector::new(
@@ -907,7 +930,7 @@ where
     fn mouse_interaction(
         &self,
         tree: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         viewport: &Rectangle,
         renderer: &Renderer,
@@ -921,7 +944,7 @@ where
         self.children
             .iter()
             .zip(&tree.children)
-            .zip(layout.children())
+            .zip(layout.iter(&tree.children).map(|(layout, _)| layout))
             .map(|((child, state), layout)| {
                 child.as_widget().mouse_interaction(
                     state, layout, cursor, viewport, renderer,
@@ -937,7 +960,7 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         defaults: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
@@ -958,18 +981,28 @@ where
                 let child_count = self.children.len();
 
                 let target_index = if cursor.position().is_some() {
-                    let target_index =
-                        self.compute_target_index(*last_cursor, layout);
+                    let target_index = self.compute_target_index(
+                        *last_cursor,
+                        layout,
+                        &tree.children,
+                    );
                     target_index.min(child_count - 1)
                 } else {
                     *index
                 };
 
-                let drag_bounds =
-                    layout.children().nth(*index).unwrap().bounds();
+                let drag_bounds = layout
+                    .iter(&tree.children)
+                    .map(|(layout, _)| layout)
+                    .nth(*index)
+                    .unwrap()
+                    .bounds();
 
-                let child_bounds: Vec<Rectangle> =
-                    layout.children().map(|l| l.bounds()).collect();
+                let child_bounds: Vec<Rectangle> = layout
+                    .iter(&tree.children)
+                    .map(|(layout, _)| layout)
+                    .map(|l| l.bounds())
+                    .collect();
 
                 let start = layout.bounds().position()
                     + Vector::new(self.padding.left, self.padding.top);
@@ -992,7 +1025,11 @@ where
 
                     let child = &self.children[i];
                     let state = &tree.children[i];
-                    let child_layout = layout.children().nth(i).unwrap();
+                    let child_layout = layout
+                        .iter(&tree.children)
+                        .map(|(layout, _)| layout)
+                        .nth(i)
+                        .unwrap();
 
                     let offset_x = if i < animations.offsets_x.len() {
                         let v = animations.offsets_x[i]
@@ -1043,7 +1080,11 @@ where
 
                 let child = &self.children[*index];
                 let state = &tree.children[*index];
-                let child_layout = layout.children().nth(*index).unwrap();
+                let child_layout = layout
+                    .iter(&tree.children)
+                    .map(|(layout, _)| layout)
+                    .nth(*index)
+                    .unwrap();
 
                 let scale_factor = 1.0
                     + (style.scale - 1.0)
@@ -1091,7 +1132,11 @@ where
             } => {
                 for (i, child) in self.children.iter().enumerate() {
                     let state = &tree.children[i];
-                    let child_layout = layout.children().nth(i).unwrap();
+                    let child_layout = layout
+                        .iter(&tree.children)
+                        .map(|(layout, _)| layout)
+                        .nth(i)
+                        .unwrap();
 
                     let offset_x = if i < animations.offsets_x.len() {
                         let is_animating =
@@ -1160,12 +1205,11 @@ where
                         viewport
                     };
 
-                    for ((child, state), layout) in self
+                    for (child, (layout, state)) in self
                         .children
                         .iter()
-                        .zip(&tree.children)
-                        .zip(layout.children())
-                        .filter(|(_, layout)| {
+                        .zip(layout.iter(&tree.children))
+                        .filter(|(_, (layout, _))| {
                             layout.bounds().intersects(viewport)
                         })
                     {
@@ -1182,10 +1226,11 @@ where
     fn overlay<'b>(
         &'b mut self,
         tree: &'b mut Tree,
-        layout: Layout<'b>,
+        layout: Layout,
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
+        window: Size,
     ) -> Vec<overlay::Element<'b, Message, Theme, Renderer>> {
         overlay::from_children(
             &mut self.children,
@@ -1194,6 +1239,7 @@ where
             renderer,
             viewport,
             translation,
+            window,
         )
     }
 }
@@ -1277,7 +1323,7 @@ where
         tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
-    ) -> layout::Node {
+    ) {
         let limits = limits
             .width(self.row.width)
             .height(self.row.height)
@@ -1298,7 +1344,6 @@ where
             }
         }
 
-        let mut children: Vec<layout::Node> = Vec::new();
         let mut intrinsic_size = Size::ZERO;
         let mut row_start = 0;
         let mut row_height = 0.0;
@@ -1313,32 +1358,30 @@ where
 
         let align_y = |row_start: std::ops::Range<usize>,
                        row_height: f32,
-                       children: &mut Vec<layout::Node>| {
+                       children: &mut [Tree]| {
             if align_factor != 0.0 {
                 for node in &mut children[row_start] {
-                    let height = node.size().height;
+                    let height = node.size.height;
 
-                    node.translate_mut(Vector::new(
-                        0.0,
-                        (row_height - height) / align_factor,
-                    ));
+                    node.translation +=
+                        Vector::new(0.0, (row_height - height) / align_factor);
                 }
             }
         };
 
         for (i, child) in self.row.children.iter_mut().enumerate() {
-            let node = child.as_widget_mut().layout(
+            child.as_widget_mut().layout(
                 &mut tree.children[i],
                 renderer,
                 &child_limits,
             );
 
-            let child_size = node.size();
+            let child_size = tree.children[i].size;
 
             if x != 0.0 && x + child_size.width > max_width {
                 intrinsic_size.width = intrinsic_size.width.max(x - spacing);
 
-                align_y(row_start..i, row_height, &mut children);
+                align_y(row_start..i, row_height, &mut tree.children);
 
                 y += row_height + vertical_spacing;
                 x = 0.0;
@@ -1348,10 +1391,10 @@ where
 
             row_height = row_height.max(child_size.height);
 
-            children.push(node.move_to((
+            tree.children[i].translation = Vector::new(
                 x + self.row.padding.left,
                 y + self.row.padding.top,
-            )));
+            );
 
             x += child_size.width + spacing;
         }
@@ -1361,7 +1404,11 @@ where
         }
 
         intrinsic_size.height = y + row_height;
-        align_y(row_start..children.len(), row_height, &mut children);
+        align_y(
+            row_start..tree.children.len(),
+            row_height,
+            &mut tree.children,
+        );
 
         let align_factor = match self.align_x {
             alignment::Horizontal::Left => 0.0,
@@ -1374,23 +1421,24 @@ where
 
             let mut row_start = 0;
 
-            for i in 0..children.len() {
-                let bounds = children[i].bounds();
-                let row_width = bounds.x + bounds.width;
+            for i in 0..tree.children.len() {
+                let bounds = Rectangle::new(
+                    Point::ORIGIN + tree.children[i].translation,
+                    tree.children[i].size,
+                );
+                let row_width = bounds.x - self.row.padding.left + bounds.width;
 
-                let next_x = children
-                    .get(i + 1)
-                    .map(|node| node.bounds().x)
-                    .unwrap_or_default();
+                let next_y =
+                    tree.children.get(i + 1).map(|node| node.translation.y);
 
-                if next_x == 0.0 {
+                if next_y.is_none_or(|next_y| next_y > bounds.y) {
                     let translation = Vector::new(
                         (total_width - row_width) / align_factor,
                         0.0,
                     );
 
-                    for node in &mut children[row_start..=i] {
-                        node.translate_mut(translation);
+                    for node in &mut tree.children[row_start..=i] {
+                        node.translation += translation;
                     }
 
                     row_start = i + 1;
@@ -1404,18 +1452,24 @@ where
         if self.row.id.is_some() {
             let state = tree.state.downcast_mut::<WidgetState>();
             state.positions.clear();
-            for (i, child) in children.iter().enumerate() {
-                state.positions.set(i, child.bounds());
+            for (i, child) in tree.children.iter().enumerate() {
+                state.positions.set(
+                    i,
+                    Rectangle::new(
+                        Point::ORIGIN + child.translation,
+                        child.size,
+                    ),
+                );
             }
         }
 
-        layout::Node::with_children(size.expand(self.row.padding), children)
+        tree.size = size.expand(self.row.padding);
     }
 
     fn operate(
         &mut self,
         tree: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         viewport: &Rectangle,
         renderer: &Renderer,
         operation: &mut dyn Operation,
@@ -1428,7 +1482,7 @@ where
         &mut self,
         tree: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         renderer: &Renderer,
         shell: &mut Shell<'_, Message>,
@@ -1441,7 +1495,7 @@ where
     fn mouse_interaction(
         &self,
         tree: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         viewport: &Rectangle,
         renderer: &Renderer,
@@ -1456,7 +1510,7 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
@@ -1467,13 +1521,14 @@ where
     fn overlay<'b>(
         &'b mut self,
         tree: &'b mut Tree,
-        layout: Layout<'b>,
+        layout: Layout,
         renderer: &Renderer,
         viewport: &Rectangle,
         translation: Vector,
+        window: Size,
     ) -> Vec<overlay::Element<'b, Message, Theme, Renderer>> {
         self.row
-            .overlay(tree, layout, renderer, viewport, translation)
+            .overlay(tree, layout, renderer, viewport, translation, window)
     }
 }
 

@@ -287,51 +287,51 @@ where
         }
     }
 
+    fn diff(&mut self, tree: &mut Tree) {
+        tree.children.resize_with(2, Tree::empty);
+    }
+
     fn layout(
         &mut self,
         tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
-    ) -> layout::Node {
-        layout::next_to_each_other(
-            &limits.width(self.width),
-            if self.label.is_some() { self.gap } else { 0.0 },
-            |_| layout::Node::new(Size::new(self.size, self.size)),
-            |limits| {
-                if let Some(label) = self.label.as_deref() {
-                    let state =
-                        tree.state.downcast_mut::<State<Renderer::Paragraph>>();
+    ) {
+        let limits = limits.width(self.width);
+        let radio = Size::new(self.size, self.size);
+        let spacing = if self.label.is_some() { self.gap } else { 0.0 };
+        let label = if let Some(label) = self.label.as_deref() {
+            let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
 
-                    widget::text::layout(
-                        &mut state.paragraph,
-                        renderer,
-                        limits,
-                        label,
-                        widget::text::Format {
-                            width: self.width,
-                            height: Length::Shrink,
-                            line_height: self.line_height,
-                            size: self.text_size,
-                            font: self.font,
-                            align_x: text::Alignment::Default,
-                            align_y: alignment::Vertical::Top,
-                            shaping: self.shaping,
-                            wrapping: self.wrapping,
-                            ellipsis: text::Ellipsis::None,
-                        },
-                    )
-                } else {
-                    layout::Node::new(Size::ZERO)
-                }
-            },
-        )
+            widget::text::layout(
+                &mut state.paragraph,
+                renderer,
+                &limits.shrink(Size::new(radio.width + spacing, 0.0)),
+                label,
+                widget::text::Format {
+                    width: self.width,
+                    height: Length::Shrink,
+                    line_height: self.line_height,
+                    size: self.text_size,
+                    font: self.font,
+                    align_x: text::Alignment::Default,
+                    align_y: alignment::Vertical::Top,
+                    shaping: self.shaping,
+                    wrapping: self.wrapping,
+                    ellipsis: text::Ellipsis::None,
+                },
+            )
+        } else {
+            Size::ZERO
+        };
+        layout::next_to_each_other(tree, radio, label, spacing);
     }
 
     fn update(
         &mut self,
         tree: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         _renderer: &Renderer,
         shell: &mut Shell<'_, Message>,
@@ -417,7 +417,7 @@ where
     fn mouse_interaction(
         &self,
         _tree: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         _viewport: &Rectangle,
         _renderer: &Renderer,
@@ -435,13 +435,14 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         defaults: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         _cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
         let state = tree.state.downcast_ref::<State<Renderer::Paragraph>>();
 
-        let mut children = layout.children();
+        let mut children =
+            layout.iter(&tree.children).map(|(layout, _)| layout);
 
         let current_status = self.last_status.unwrap_or(Status::Disabled {
             is_selected: self.is_selected,
@@ -494,7 +495,7 @@ where
     fn operate(
         &mut self,
         _tree: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         _viewport: &Rectangle,
         _renderer: &Renderer,
         operation: &mut dyn widget::Operation,

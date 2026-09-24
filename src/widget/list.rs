@@ -71,7 +71,7 @@ impl<'a, T, Message, Theme, Renderer> List<'a, T, Message, Theme, Renderer> {
 
 struct State {
     last_limits: layout::Limits,
-    visible_layouts: Vec<(usize, layout::Node, Tree)>,
+    visible_layouts: Vec<(usize, Layout, Tree)>,
     size: Size,
     offsets: Vec<f32>,
     widths: Vec<f32>,
@@ -137,7 +137,7 @@ where
         tree: &mut Tree,
         renderer: &Renderer,
         limits: &layout::Limits,
-    ) -> layout::Node {
+    ) {
         let state = tree.state.downcast_mut::<State>();
         let loose_limits = limits.loose();
 
@@ -183,11 +183,13 @@ where
                                 &mut new_tree
                             };
 
-                            let new_layout = new_element
-                                .as_widget_mut()
-                                .layout(tree, renderer, &state.last_limits);
-
-                            let new_size = new_layout.size();
+                            new_element.as_widget_mut().layout(
+                                tree,
+                                renderer,
+                                &state.last_limits,
+                            );
+                            let new_layout = Layout::new(tree.size);
+                            let new_size = tree.size;
 
                             let height_difference = new_size.height
                                 - (state.offsets[original + 1]
@@ -207,8 +209,11 @@ where
                                 for (i, layout, _) in
                                     &mut state.visible_layouts[visible_index..]
                                 {
-                                    layout
-                                        .move_to_mut((0.0, state.offsets[*i]));
+                                    *layout = layout.move_to((
+                                        0.0,
+                                        state.offsets[*i]
+                                            + self.spacing * *i as f32,
+                                    ));
                                 }
                             } else if let Some(first_visible) =
                                 state.visible_layouts.first()
@@ -218,9 +223,10 @@ where
                                     for (i, layout, _) in
                                         &mut state.visible_layouts[..]
                                     {
-                                        layout.move_to_mut((
+                                        *layout = layout.move_to((
                                             0.0,
-                                            state.offsets[*i],
+                                            state.offsets[*i]
+                                                + self.spacing * *i as f32,
                                         ));
                                     }
                                 }
@@ -271,13 +277,12 @@ where
                             let mut tree = Tree::new(&new_element);
                             new_element.as_widget_mut().diff(&mut tree);
 
-                            let layout = new_element.as_widget_mut().layout(
+                            new_element.as_widget_mut().layout(
                                 &mut tree,
                                 renderer,
                                 &state.last_limits,
                             );
-
-                            let size = layout.size();
+                            let size = tree.size;
 
                             state.widths.push(size.width);
                             state.offsets.push(
@@ -331,12 +336,14 @@ where
                     let mut tree = Tree::new(&element);
                     element.as_widget_mut().diff(&mut tree);
 
-                    let layout = element
-                        .as_widget_mut()
-                        .layout(&mut tree, renderer, &state.last_limits)
-                        .move_to((0.0, accumulated_height));
-
-                    let bounds = layout.bounds();
+                    element.as_widget_mut().layout(
+                        &mut tree,
+                        renderer,
+                        &state.last_limits,
+                    );
+                    let bounds = Layout::new(tree.size)
+                        .move_to((0.0, accumulated_height))
+                        .bounds();
 
                     max_width = max_width.max(bounds.width);
                     accumulated_height += bounds.height;
@@ -372,14 +379,14 @@ where
         let size =
             limits.resolve(Length::Shrink, Length::Shrink, intrinsic_size);
 
-        layout::Node::new(size)
+        tree.size = size;
     }
 
     fn update(
         &mut self,
         tree: &mut Tree,
         event: &Event,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         renderer: &Renderer,
         shell: &mut Shell<'_, Message>,
@@ -388,7 +395,7 @@ where
         let state = tree.state.downcast_mut::<State>();
         let offset = layout.position() - Point::ORIGIN;
 
-        for (element, (index, layout, tree)) in self
+        for (element, (_index, layout, tree)) in self
             .visible_elements
             .iter_mut()
             .zip(&mut state.visible_layouts)
@@ -396,10 +403,7 @@ where
             element.as_widget_mut().update(
                 tree,
                 event,
-                Layout::with_offset(
-                    offset + Vector::new(0.0, self.spacing * *index as f32),
-                    layout,
-                ),
+                layout.move_to(layout.position() + offset),
                 cursor,
                 renderer,
                 shell,
@@ -494,14 +498,15 @@ where
                     let mut tree = Tree::new(&element);
                     element.as_widget_mut().diff(&mut tree);
 
-                    let layout = element
-                        .as_widget_mut()
-                        .layout(&mut tree, renderer, &state.last_limits)
-                        .move_to((
-                            0.0,
-                            offsets[start + i]
-                                + (start + i) as f32 * self.spacing,
-                        ));
+                    element.as_widget_mut().layout(
+                        &mut tree,
+                        renderer,
+                        &state.last_limits,
+                    );
+                    let layout = Layout::new(tree.size).move_to((
+                        0.0,
+                        offsets[start + i] + (start + i) as f32 * self.spacing,
+                    ));
 
                     state.visible_layouts.insert(i, (start + i, layout, tree));
                     self.visible_elements.insert(i, element);
@@ -523,14 +528,16 @@ where
                     let mut tree = Tree::new(&element);
                     element.as_widget_mut().diff(&mut tree);
 
-                    let layout = element
-                        .as_widget_mut()
-                        .layout(&mut tree, renderer, &state.last_limits)
-                        .move_to((
-                            0.0,
-                            offsets[last_visible + i]
-                                + (last_visible + i) as f32 * self.spacing,
-                        ));
+                    element.as_widget_mut().layout(
+                        &mut tree,
+                        renderer,
+                        &state.last_limits,
+                    );
+                    let layout = Layout::new(tree.size).move_to((
+                        0.0,
+                        offsets[last_visible + i]
+                            + (last_visible + i) as f32 * self.spacing,
+                    ));
 
                     state.visible_layouts.push((
                         last_visible + i,
@@ -541,7 +548,7 @@ where
                 }
             }
 
-            for (element, (index, item_layout, tree)) in self
+            for (element, (_index, item_layout, tree)) in self
                 .visible_elements
                 .iter_mut()
                 .zip(&mut state.visible_layouts)
@@ -549,10 +556,7 @@ where
                 element.as_widget_mut().update(
                     tree,
                     event,
-                    Layout::with_offset(
-                        offset + Vector::new(0.0, self.spacing * *index as f32),
-                        item_layout,
-                    ),
+                    item_layout.move_to(item_layout.position() + offset),
                     cursor,
                     renderer,
                     shell,
@@ -568,7 +572,7 @@ where
         renderer: &mut Renderer,
         theme: &Theme,
         style: &renderer::Style,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
@@ -583,7 +587,7 @@ where
                 renderer,
                 theme,
                 style,
-                Layout::with_offset(offset, layout),
+                layout.move_to(layout.position() + offset),
                 cursor,
                 viewport,
             );
@@ -593,7 +597,7 @@ where
     fn mouse_interaction(
         &self,
         tree: &Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         cursor: mouse::Cursor,
         viewport: &Rectangle,
         renderer: &Renderer,
@@ -607,7 +611,7 @@ where
             .map(|(element, (_item, layout, tree))| {
                 element.as_widget().mouse_interaction(
                     tree,
-                    Layout::with_offset(offset, layout),
+                    layout.move_to(layout.position() + offset),
                     cursor,
                     viewport,
                     renderer,
@@ -620,7 +624,7 @@ where
     fn operate(
         &mut self,
         tree: &mut Tree,
-        layout: Layout<'_>,
+        layout: Layout,
         viewport: &Rectangle,
         renderer: &Renderer,
         operation: &mut dyn widget::Operation,
@@ -635,7 +639,7 @@ where
         {
             element.as_widget_mut().operate(
                 tree,
-                Layout::with_offset(offset, layout),
+                layout.move_to(layout.position() + offset),
                 viewport,
                 renderer,
                 operation,
@@ -646,10 +650,11 @@ where
     fn overlay<'b>(
         &'b mut self,
         tree: &'b mut Tree,
-        layout: Layout<'b>,
+        layout: Layout,
         renderer: &Renderer,
         _viewport: &Rectangle,
         translation: Vector,
+        window: Size,
     ) -> Vec<overlay::Element<'b, Message, Theme, Renderer>> {
         let state = tree.state.downcast_mut::<State>();
         let offset = layout.position() - Point::ORIGIN;
@@ -657,16 +662,16 @@ where
         self.visible_elements
             .iter_mut()
             .zip(&mut state.visible_layouts)
-            .map(|(child, (_item, layout, tree))| {
+            .flat_map(|(child, (_item, layout, tree))| {
                 child.as_widget_mut().overlay(
                     tree,
-                    Layout::with_offset(offset, layout),
+                    layout.move_to(layout.position() + offset),
                     renderer,
                     _viewport,
                     translation,
+                    window,
                 )
             })
-            .flatten()
             .collect()
     }
 }
@@ -875,7 +880,7 @@ mod tests {
         let mut tree = Tree::new(&list);
         list.as_widget_mut().diff(&mut tree);
 
-        let node = list.as_widget_mut().layout(&mut tree, &(), &LIMITS);
+        list.as_widget_mut().layout(&mut tree, &(), &LIMITS);
         let state = tree.state.downcast_ref::<State>();
 
         assert!(
@@ -887,7 +892,7 @@ mod tests {
         assert_eq!(state.size, Size::new(100.0, 60.0));
 
         // width=Shrink resolves to intrinsic (100), height=60 + 2*spacing(10) = 80
-        assert_eq!(node.size(), Size::new(100.0, 80.0));
+        assert_eq!(tree.size, Size::new(100.0, 80.0));
     }
 
     #[test]
@@ -903,7 +908,7 @@ mod tests {
         tree.diff(element);
 
         // Layout first to compute offsets
-        let layout_node = widget.layout(&mut tree, &(), &LIMITS);
+        widget.layout(&mut tree, &(), &LIMITS);
 
         // Now simulate RedrawRequested
         let redraw = Event::Window(window::Event::RedrawRequested(
@@ -914,20 +919,17 @@ mod tests {
         let window = crate::core::window::Headless;
         let mut messages = crate::core::shell::Bus::<Never>::new();
         let mut shell = Shell::new(&window, waker, &mut messages);
+        let layout = Layout::new(tree.size);
 
         widget.update(
             &mut tree,
             &redraw,
-            Layout::new(&layout_node),
+            layout,
             mouse::Cursor::Unavailable,
             &(),
             &mut shell,
             &viewport,
         );
-
-        let state = tree.state.downcast_ref::<State>();
-        eprintln!("visible_layouts: {}", state.visible_layouts.len());
-        eprintln!("visible_elements: {}", widget.visible_elements.len());
 
         assert!(
             !widget.visible_elements.is_empty(),

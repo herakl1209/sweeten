@@ -58,6 +58,7 @@ impl App {
                         x: None,
                         y: Some(bounds.y),
                     },
+                    iced::widget::operation::Animation::Instant,
                 );
             }
             Message::ScrollResult(None) => {}
