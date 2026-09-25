@@ -633,23 +633,36 @@ where
     ) {
         let action = &mut tree.state.downcast_mut::<WidgetState>().action;
 
-        for (child, (layout, state)) in self
-            .children
-            .iter_mut()
-            .zip(layout.iter_mut(&mut tree.children))
-        {
-            let cursor = if matches!(action, Action::Dragging { .. }) {
-                cursor.levitate()
-            } else {
-                cursor
-            };
-
-            child.as_widget_mut().update(
-                state, event, layout, cursor, renderer, shell, viewport,
+        let handling_drag_pointer = !matches!(action, Action::Idle { .. })
+            && matches!(
+                event,
+                Event::Mouse(
+                    mouse::Event::CursorMoved { .. }
+                        | mouse::Event::ButtonReleased(mouse::Button::Left)
+                )
             );
+        let dragging_pointer =
+            matches!(action, Action::Dragging { .. }) && handling_drag_pointer;
+
+        if !dragging_pointer {
+            for (child, (layout, state)) in self
+                .children
+                .iter_mut()
+                .zip(layout.iter_mut(&mut tree.children))
+            {
+                let cursor = if matches!(action, Action::Dragging { .. }) {
+                    cursor.levitate()
+                } else {
+                    cursor
+                };
+
+                child.as_widget_mut().update(
+                    state, event, layout, cursor, renderer, shell, viewport,
+                );
+            }
         }
 
-        if shell.is_event_captured() {
+        if shell.is_event_captured() && !handling_drag_pointer {
             return;
         }
 
@@ -811,19 +824,7 @@ where
 
                         shell.capture_event();
                     } else {
-                        let index = *index;
-                        let now = *now;
-
-                        if let Some(on_drag) = &self.on_drag {
-                            shell.publish(on_drag(DragEvent::Canceled {
-                                index,
-                            }));
-                        }
-
-                        *action = Action::Idle {
-                            now: Some(now),
-                            animations: std::mem::take(animations),
-                        };
+                        shell.capture_event();
                     }
                 }
                 _ => {}

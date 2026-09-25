@@ -282,7 +282,7 @@ where
     pub fn overlay(
         self,
         position: Point,
-        viewport: Rectangle,
+        _viewport: Rectangle,
         target_height: f32,
         menu_height: Length,
         renderer: &Renderer,
@@ -290,7 +290,6 @@ where
     ) -> overlay::Element<'a, Message, Theme, Renderer> {
         overlay::Element::new(Box::new(Overlay::new(
             position,
-            viewport,
             self,
             target_height,
             menu_height,
@@ -304,6 +303,7 @@ where
 #[derive(Debug)]
 pub struct State {
     tree: Tree,
+    id: Id,
 }
 
 impl State {
@@ -311,6 +311,7 @@ impl State {
     pub fn new() -> Self {
         Self {
             tree: Tree::empty(),
+            id: Id::unique(),
         }
     }
 }
@@ -327,7 +328,6 @@ where
     Renderer: text::Renderer,
 {
     position: Point,
-    viewport: Rectangle,
     tree: &'a mut Tree,
     list: Scrollable<'a, Message, Theme, Renderer>,
     id: Id,
@@ -351,7 +351,6 @@ where
 {
     pub fn new<T>(
         position: Point,
-        viewport: Rectangle,
         menu: Menu<'a, 'b, T, Message, Theme, Renderer>,
         target_height: f32,
         menu_height: Length,
@@ -505,7 +504,7 @@ where
             None
         };
 
-        let id = Id::unique();
+        let id = state.id.clone();
 
         let mut list = Scrollable::new(List {
             values,
@@ -546,7 +545,6 @@ where
 
         let mut overlay = Self {
             position,
-            viewport,
             tree: &mut state.tree,
             list,
             id,
@@ -574,10 +572,10 @@ where
 {
     fn layout(&mut self, renderer: &Renderer, window: Size) {
         let space_below =
-            window.height - (self.position.y + self.target_height);
-        let space_above = self.position.y;
+            (window.height - (self.position.y + self.target_height)).max(0.0);
+        let space_above = self.position.y.max(0.0);
         let max_size = Size::new(
-            window.width - self.position.x,
+            (window.width - self.position.x).clamp(0.0, window.width),
             if self.aligned_row.is_some() {
                 window.height
             } else {
@@ -672,7 +670,8 @@ where
             } else {
                 self.position.y - size.height
             }
-        };
+        }
+        .clamp(0.0, (window.height - size.height).max(0.0));
 
         self.bounds = Rectangle::new(Point::new(x, y), size);
         self.list_layout =
@@ -715,7 +714,7 @@ where
             self.list.operate(
                 self.tree,
                 list_layout,
-                &self.viewport,
+                &list_bounds,
                 renderer,
                 &mut operation::scrollable::scroll_to::<()>(
                     self.id.clone(),
@@ -780,7 +779,7 @@ where
                     self.list.operate(
                         self.tree,
                         list_layout,
-                        &self.viewport,
+                        &list_bounds,
                         renderer,
                         &mut operation::scrollable::scroll_to::<()>(
                             self.id.clone(),
@@ -806,13 +805,21 @@ where
     ) -> mouse::Interaction {
         let list_layout = self.list_layout;
 
-        self.list.mouse_interaction(
+        let interaction = self.list.mouse_interaction(
             self.tree,
             list_layout,
             cursor,
-            &self.viewport,
+            &list_layout.bounds(),
             renderer,
-        )
+        );
+
+        if interaction == mouse::Interaction::None
+            && cursor.is_over(self.bounds)
+        {
+            mouse::Interaction::Idle
+        } else {
+            interaction
+        }
     }
 
     fn draw(
@@ -1233,10 +1240,7 @@ where
             height += row_size.height;
         }
 
-        tree.size = Size::new(
-            max_width,
-            (height + self.menu_padding.bottom).min(limits.max.height),
-        );
+        tree.size = Size::new(max_width, height + self.menu_padding.bottom);
     }
 
     fn update(
