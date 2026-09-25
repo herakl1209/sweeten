@@ -736,7 +736,7 @@ where
                     now,
                     animations,
                 } => {
-                    if let Some(cursor_position) = cursor.position()
+                    if let Some(cursor_position) = cursor.observe().position()
                         && cursor_position.distance(*origin)
                             > self.deadband_zone
                     {
@@ -770,7 +770,7 @@ where
                 } => {
                     shell.request_redraw();
 
-                    let cursor = cursor.land();
+                    let cursor = cursor.observe();
 
                     if let Some(cursor_position) = cursor.position() {
                         animations.with_capacity(self.children.len());
@@ -851,7 +851,7 @@ where
 
                         animations.with_capacity(self.children.len());
 
-                        let cursor = cursor.land();
+                        let cursor = cursor.observe();
 
                         if let Some(cursor_position) = cursor.position() {
                             let target_index = self.compute_target_index(
@@ -987,20 +987,14 @@ where
                 animations,
                 ..
             } => {
-                let cursor = cursor.land();
+                let cursor = cursor.observe();
+                let drag_cursor = cursor.position().unwrap_or(*last_cursor);
 
                 let child_count = self.children.len();
 
-                let target_index = if cursor.position().is_some() {
-                    let target_index = self.compute_target_index(
-                        *last_cursor,
-                        layout,
-                        &tree.children,
-                    );
-                    target_index.min(child_count - 1)
-                } else {
-                    *index
-                };
+                let target_index = self
+                    .compute_target_index(drag_cursor, layout, &tree.children)
+                    .min(child_count - 1);
 
                 let drag_bounds = layout
                     .iter(&tree.children)
@@ -1103,7 +1097,7 @@ where
                             .interpolate_with(|v| v, *now);
 
                 let scaling = Transformation::scale(scale_factor);
-                let translation = *last_cursor - *origin * scaling;
+                let translation = drag_cursor - *origin * scaling;
 
                 renderer.with_translation(translation, |renderer| {
                     renderer.with_transformation(scaling, |renderer| {
