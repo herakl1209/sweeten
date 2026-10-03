@@ -27,6 +27,8 @@
 //!     button("Press me!").on_press(Message::ButtonPressed).into()
 //! }
 //! ```
+use iced_core::widget::Meta;
+
 use crate::core::border::{self, Border};
 use crate::core::keyboard;
 use crate::core::keyboard::key;
@@ -42,8 +44,8 @@ use crate::core::widget::operation;
 use crate::core::widget::tree::{self, Tree};
 use crate::core::window;
 use crate::core::{
-    Background, Color, Element, Event, Layout, Length, Padding, Rectangle,
-    Shadow, Shell, Size, Theme, Vector, Widget,
+    Background, Color, Event, Layout, Length, Padding, Rectangle, Shadow,
+    Shell, Size, Theme, Vector, Widget,
 };
 use crate::widget::focus;
 
@@ -92,12 +94,15 @@ use crate::widget::focus;
 ///     button("I am disabled!").into()
 /// }
 /// ```
-pub struct Button<'a, Message, Theme = crate::Theme, Renderer = crate::Renderer>
-where
-    Renderer: crate::core::Renderer,
+pub struct Button<
+    'a,
+    Message,
+    W = crate::core::Element<'a, Message, crate::Theme, crate::Renderer>,
+    Theme = crate::Theme,
+> where
     Theme: Catalog,
 {
-    content: Element<'a, Message, Theme, Renderer>,
+    content: W,
     on_press: Option<OnPress<'a, Message>>,
     on_focus: Option<Message>,
     on_blur: Option<Message>,
@@ -124,15 +129,12 @@ impl<Message: Clone> OnPress<'_, Message> {
     }
 }
 
-impl<'a, Message, Theme, Renderer> Button<'a, Message, Theme, Renderer>
+impl<'a, W, Message, Theme> Button<'a, Message, W, Theme>
 where
-    Renderer: crate::core::Renderer,
     Theme: Catalog,
 {
     /// Creates a new [`Button`] with the given content.
-    pub fn new(
-        content: impl Into<Element<'a, Message, Theme, Renderer>>,
-    ) -> Self {
+    pub fn new(content: impl Into<W>) -> Self {
         let content = content.into();
 
         Button {
@@ -269,12 +271,18 @@ impl operation::Focusable for State {
     }
 }
 
-impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
-    for Button<'a, Message, Theme, Renderer>
+impl<'a, Message, W, Theme> Meta for Button<'a, Message, W, Theme> where
+    Theme: Catalog
+{
+}
+
+impl<'a, W, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
+    for Button<'a, Message, W, Theme>
 where
     Message: 'a + Clone,
     Renderer: 'a + crate::core::Renderer,
     Theme: Catalog,
+    W: Widget<Message, Theme, Renderer>,
 {
     fn tag(&self) -> tree::Tag {
         tree::Tag::of::<State>()
@@ -287,7 +295,7 @@ where
     fn diff(&mut self, tree: &mut Tree) {
         tree.diff_children(std::slice::from_mut(&mut self.content));
 
-        let size = self.content.as_widget().size();
+        let size = self.content.size();
         self.width = self.width.stack(size.width);
         self.height = self.height.stack(size.height);
     }
@@ -312,7 +320,7 @@ where
             self.height,
             self.padding,
             |tree, limits| {
-                self.content.as_widget_mut().layout(tree, renderer, limits);
+                self.content.layout(tree, renderer, limits);
                 tree.size
             },
         );
@@ -335,7 +343,7 @@ where
         operation.traverse(&mut |operation| {
             let (content_layout, content_tree) =
                 layout.iter_mut(&mut tree.children).next().unwrap();
-            self.content.as_widget_mut().operate(
+            self.content.operate(
                 content_tree,
                 content_layout,
                 viewport,
@@ -357,7 +365,7 @@ where
     ) {
         let (content_layout, content_tree) =
             layout.iter_mut(&mut tree.children).next().unwrap();
-        self.content.as_widget_mut().update(
+        self.content.update(
             content_tree,
             event,
             content_layout,
@@ -541,7 +549,7 @@ where
             *viewport
         };
 
-        self.content.as_widget().draw(
+        self.content.draw(
             &tree.children[0],
             renderer,
             theme,
@@ -582,7 +590,7 @@ where
     ) -> Vec<overlay::Element<'b, Message, Theme, Renderer>> {
         let (layout, tree) =
             layout.iter_mut(&mut tree.children).next().unwrap();
-        self.content.as_widget_mut().overlay(
+        self.content.overlay(
             tree,
             layout,
             renderer,
@@ -590,18 +598,6 @@ where
             translation,
             window,
         )
-    }
-}
-
-impl<'a, Message, Theme, Renderer> From<Button<'a, Message, Theme, Renderer>>
-    for Element<'a, Message, Theme, Renderer>
-where
-    Message: Clone + 'a,
-    Theme: Catalog + 'a,
-    Renderer: crate::core::Renderer + 'a,
-{
-    fn from(button: Button<'a, Message, Theme, Renderer>) -> Self {
-        Self::new(button)
     }
 }
 

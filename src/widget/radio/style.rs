@@ -59,6 +59,11 @@ pub trait Catalog {
 
     /// The [`Style`] of a class with the given status.
     fn style(&self, class: &Self::Class<'_>, status: Status) -> Style;
+
+    /// The color used to highlight selected label text.
+    fn selection(&self) -> Color {
+        Color::TRANSPARENT
+    }
 }
 
 /// A styling function for a radio button.
@@ -73,6 +78,10 @@ impl Catalog for Theme {
 
     fn style(&self, class: &Self::Class<'_>, status: Status) -> Style {
         class(self, status)
+    }
+
+    fn selection(&self) -> Color {
+        self.palette().background.strongest.color
     }
 }
 

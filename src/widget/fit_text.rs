@@ -60,13 +60,12 @@ use crate::core::text;
 use crate::core::text::paragraph::{self, Paragraph};
 use crate::core::widget::text as core_text;
 use crate::core::widget::tree::{self, Tree};
-use crate::core::{
-    Color, Element, Font, Length, Pixels, Rectangle, Size, Widget,
-};
+use crate::core::{Color, Font, Length, Pixels, Rectangle, Size, Widget};
 
 pub use core_text::{
     Alignment, Catalog, Ellipsis, LineHeight, Shaping, Style, StyleFn, Wrapping,
 };
+use iced_core::widget::Meta;
 
 /// Text that scales its font size to fit its laid-out bounds.
 ///
@@ -80,6 +79,7 @@ where
     format: core_text::Format,
     min_size: Option<Pixels>,
     max_size: Option<Pixels>,
+    selectable: bool,
     class: Theme::Class<'a>,
 }
 
@@ -111,6 +111,7 @@ where
             format,
             min_size: None,
             max_size: None,
+            selectable: false,
             class: Theme::default(),
         }
     }
@@ -131,6 +132,12 @@ where
     /// Defaults to `1.0` pixel if not set.
     pub fn min_size(mut self, size: impl Into<Pixels>) -> Self {
         self.min_size = Some(size.into());
+        self
+    }
+
+    /// Sets whether the text can be selected and copied.
+    pub fn selectable(mut self, selectable: bool) -> Self {
+        self.selectable = selectable;
         self
     }
 
@@ -231,7 +238,10 @@ where
     {
         let color = color.map(Into::into);
 
-        self.style(move |_theme| Style { color })
+        self.style(move |_theme| Style {
+            color,
+            selection: None,
+        })
     }
 
     /// Sets the style class of the [`FitText`].
@@ -296,6 +306,8 @@ fn size_eq(a: Size, b: Size) -> bool {
     a.width.to_bits() == b.width.to_bits()
         && a.height.to_bits() == b.height.to_bits()
 }
+
+impl<'a, Theme> Meta for FitText<'a, Theme> where Theme: Catalog {}
 
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for FitText<'_, Theme>
@@ -439,20 +451,33 @@ where
             defaults,
             layout.bounds(),
             state.paragraph.raw(),
-            style,
+            core_text::Style {
+                color: style.color,
+                selection: None,
+            },
+            theme.selection(),
             viewport,
         );
     }
 
     fn operate(
         &mut self,
-        _tree: &mut Tree,
+        tree: &mut Tree,
         layout: Layout,
         _viewport: &Rectangle,
         _renderer: &Renderer,
         operation: &mut dyn crate::core::widget::Operation,
     ) {
-        operation.text(None, layout.bounds(), &self.fragment);
+        let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
+        operation.text(
+            None,
+            layout.bounds(),
+            &mut crate::core::widget::text::Operand {
+                paragraph: &mut state.paragraph,
+                layout,
+                selectable: self.selectable,
+            },
+        );
     }
 }
 
@@ -516,15 +541,4 @@ fn fit<P: Paragraph>(
         }
     }
     Pixels(lo)
-}
-
-impl<'a, Message, Theme, Renderer> From<FitText<'a, Theme>>
-    for Element<'a, Message, Theme, Renderer>
-where
-    Theme: Catalog + 'a,
-    Renderer: text::Renderer + 'a,
-{
-    fn from(text: FitText<'a, Theme>) -> Element<'a, Message, Theme, Renderer> {
-        Element::new(text)
-    }
 }

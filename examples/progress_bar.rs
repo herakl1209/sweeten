@@ -15,8 +15,9 @@
 
 use std::time::Duration;
 
+use iced::Widget;
 use iced::widget::{button, center, column, container, text};
-use iced::{Center, Element, Fill, Task, Theme};
+use iced::{Center, Fill, Task, Theme};
 
 use sweeten::widget::progress_bar;
 
@@ -65,7 +66,7 @@ impl Example {
         }
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    fn view(&self) -> impl Widget<Message> {
         let bar = progress_bar(0.0..=100.0, self.progress)
             .girth(4.0)
             .length(240.0);
@@ -87,7 +88,7 @@ impl Example {
         )
         .width(Fill)
         .height(Fill)
-        .into()
+        .boxed()
     }
 }
 

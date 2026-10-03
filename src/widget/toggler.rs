@@ -30,6 +30,8 @@
 //!     }
 //! }
 //! ```
+use iced_core::widget::Meta;
+
 use crate::animation::cubic_bezier;
 use crate::core::alignment;
 use crate::core::animation::Easing;
@@ -44,8 +46,8 @@ use crate::core::widget;
 use crate::core::widget::tree::{self, Tree};
 use crate::core::window;
 use crate::core::{
-    Animation, Background, Border, Color, Element, Event, Font, Layout, Length,
-    Pixels, Rectangle, Shell, Size, Theme, Widget,
+    Animation, Background, Border, Color, Event, Font, Layout, Length, Pixels,
+    Rectangle, Shell, Size, Theme, Widget,
 };
 
 /// A toggler widget.
@@ -254,10 +256,15 @@ where
 
 /// Internal state for the animated [`Toggler`].
 struct State<P: text::Paragraph> {
-    paragraph: widget::text::State<P>,
+    paragraph: text::paragraph::Plain<P>,
     animation: Animation<bool>,
     now: Option<Instant>,
     last_is_toggled: bool,
+}
+
+impl<'a, Message, Theme> Meta for Toggler<'a, Message, Theme> where
+    Theme: Catalog
+{
 }
 
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer>
@@ -272,7 +279,7 @@ where
 
     fn state(&self) -> tree::State {
         tree::State::new(State::<Renderer::Paragraph> {
-            paragraph: widget::text::State::default(),
+            paragraph: text::paragraph::Plain::default(),
             animation: Animation::new(self.is_toggled)
                 .very_quick()
                 // cubic-bezier(0, 0, 0.2, 1) — Tailwind v4's
@@ -419,6 +426,31 @@ where
         }
     }
 
+    fn operate(
+        &mut self,
+        tree: &mut Tree,
+        layout: Layout,
+        _viewport: &Rectangle,
+        _renderer: &Renderer,
+        operation: &mut dyn widget::Operation,
+    ) {
+        if self.label.is_some() {
+            let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
+            let mut children = layout.iter(&tree.children);
+            let _ = children.next();
+            let (label_layout, _) = children.next().unwrap();
+            operation.text(
+                None,
+                label_layout.bounds(),
+                &mut widget::text::Operand {
+                    paragraph: &mut state.paragraph,
+                    layout: label_layout,
+                    selectable: true,
+                },
+            );
+        }
+    }
+
     fn mouse_interaction(
         &self,
         _tree: &Tree,
@@ -511,7 +543,9 @@ where
                 state.paragraph.raw(),
                 crate::text::Style {
                     color: style.text_color,
+                    selection: None,
                 },
+                theme.selection(),
                 viewport,
             );
         }
@@ -583,20 +617,6 @@ where
     }
 }
 
-impl<'a, Message, Theme, Renderer> From<Toggler<'a, Message, Theme>>
-    for Element<'a, Message, Theme, Renderer>
-where
-    Message: 'a,
-    Theme: Catalog + 'a,
-    Renderer: text::Renderer + 'a,
-{
-    fn from(
-        toggler: Toggler<'a, Message, Theme>,
-    ) -> Element<'a, Message, Theme, Renderer> {
-        Element::new(toggler)
-    }
-}
-
 /// The possible status of a [`Toggler`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Status {
@@ -663,6 +683,11 @@ pub trait Catalog: Sized {
 
     /// The [`Style`] of a class with the given status.
     fn style(&self, class: &Self::Class<'_>, status: Status) -> Style;
+
+    /// The color used to highlight selected label text.
+    fn selection(&self) -> Color {
+        Color::TRANSPARENT
+    }
 }
 
 /// A styling function for a [`Toggler`].
@@ -679,6 +704,10 @@ impl Catalog for Theme {
 
     fn style(&self, class: &Self::Class<'_>, status: Status) -> Style {
         class(self, status)
+    }
+
+    fn selection(&self) -> Color {
+        self.palette().background.strongest.color
     }
 }
 

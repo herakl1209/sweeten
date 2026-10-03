@@ -12,10 +12,9 @@
 //!
 //! [`radio`]: sweeten::widget::radio
 use iced::Task;
+use iced::Widget;
 use iced::widget::{center, container, text};
-use iced::{
-    Center, Element, Fill, Subscription, Theme, keyboard, keyboard::key,
-};
+use iced::{Center, Fill, Subscription, Theme, keyboard, keyboard::key};
 
 use sweeten::widget::operation::{focus_next, focus_previous};
 use sweeten::widget::{button, checkbox, column, radio, row};
@@ -98,7 +97,7 @@ impl App {
         Task::none()
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    fn view(&self) -> impl Widget<Message> {
         let choices = radio(self.selection, Choice::ALL, |c| c.label())
             .on_select(Message::Selected)
             .on_focus(Message::Focused)
@@ -125,7 +124,7 @@ impl App {
         center(container(body).padding(24.0))
             .width(Fill)
             .height(Fill)
-            .into()
+            .boxed()
     }
 
     fn subscription(&self) -> Subscription<Message> {

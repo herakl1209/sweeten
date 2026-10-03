@@ -49,6 +49,8 @@
 //!         .into()
 //! }
 //! ```
+use iced_core::widget::Meta;
+
 use crate::animation::cubic_bezier;
 use crate::core::alignment;
 use crate::core::animation::Easing;
@@ -65,8 +67,8 @@ use crate::core::widget::operation;
 use crate::core::widget::tree::{self, Tree};
 use crate::core::window;
 use crate::core::{
-    Animation, Color, Element, Event, Font, Layout, Length, Pixels, Rectangle,
-    Shell, Size, Vector, Widget,
+    Animation, Color, Event, Font, Layout, Length, Pixels, Rectangle, Shell,
+    Size, Vector, Widget,
 };
 use crate::widget::focus;
 
@@ -406,7 +408,7 @@ where
 
 /// Per-option animation and text state owned by the [`Group`].
 struct ItemState<P: text::Paragraph> {
-    paragraph: widget::text::State<P>,
+    paragraph: text::paragraph::Plain<P>,
     animation: Animation<bool>,
     last_is_selected: bool,
 }
@@ -414,7 +416,7 @@ struct ItemState<P: text::Paragraph> {
 impl<P: text::Paragraph> ItemState<P> {
     fn new(is_selected: bool) -> Self {
         ItemState {
-            paragraph: widget::text::State::default(),
+            paragraph: text::paragraph::Plain::default(),
             animation: Animation::new(is_selected)
                 .very_quick()
                 // cubic-bezier(0, 0, 0.2, 1) — Tailwind v4's `--ease-out`,
@@ -454,6 +456,14 @@ impl<P: text::Paragraph> operation::Focusable for State<P> {
     }
 }
 
+impl<'a, V, Message, Theme, Renderer> Meta
+    for Group<'a, V, Message, Theme, Renderer>
+where
+    Theme: Catalog,
+    Renderer: text::Renderer,
+{
+}
+
 impl<V, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for Group<'_, V, Message, Theme, Renderer>
 where
@@ -489,14 +499,14 @@ where
             &mut self.content,
             |row, content| {
                 if let Content::Element(element) = content {
-                    row.children[1].diff(element.as_widget_mut());
+                    row.children[1].diff(element);
                 }
             },
             |content| {
                 let mut row = Tree::empty();
                 row.children.push(Tree::empty());
                 row.children.push(match content {
-                    Content::Element(element) => Tree::new(element.as_widget()),
+                    Content::Element(element) => Tree::new(element),
                     Content::Text(_) => Tree::empty(),
                 });
                 row
@@ -570,7 +580,7 @@ where
                     },
                 ),
                 Content::Element(element) => {
-                    element.as_widget_mut().layout(
+                    element.layout(
                         &mut child.children[1],
                         renderer,
                         &limits.shrink(Size::new(dot.width + gap, 0.0)),
@@ -611,10 +621,30 @@ where
         _renderer: &Renderer,
         operation: &mut dyn widget::Operation,
     ) {
-        if self.on_select.is_some() {
-            let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
+        let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
+        self.reconcile(state);
 
+        if self.on_select.is_some() {
             operation.focusable(self.id.as_ref(), layout.bounds(), state);
+        }
+
+        for (i, (row_layout, row_tree)) in
+            layout.iter(&tree.children).enumerate()
+        {
+            if let Content::Text(_) = &self.content[i] {
+                let mut children = row_layout.iter(&row_tree.children);
+                let _ = children.next();
+                let (label_layout, _) = children.next().unwrap();
+                operation.text(
+                    None,
+                    label_layout.bounds(),
+                    &mut widget::text::Operand {
+                        paragraph: &mut state.items[i].paragraph,
+                        layout: label_layout,
+                        selectable: true,
+                    },
+                );
+            }
         }
     }
 
@@ -869,12 +899,14 @@ where
                         item.paragraph.raw(),
                         crate::text::Style {
                             color: style.text_color,
+                            selection: None,
                         },
+                        theme.selection(),
                         viewport,
                     );
                 }
                 Content::Element(element) => {
-                    element.as_widget().draw(
+                    element.draw(
                         &row_tree.children[1],
                         renderer,
                         theme,
@@ -901,20 +933,4 @@ fn draw_focus_ring<Renderer: crate::core::Renderer>(
 ) {
     // Hug the dot as a full circle; `focus::ring` adds the band gap.
     focus::ring(renderer, bounds, bounds.height / 2.0, color);
-}
-
-impl<'a, V, Message, Theme, Renderer>
-    From<Group<'a, V, Message, Theme, Renderer>>
-    for Element<'a, Message, Theme, Renderer>
-where
-    V: 'a + Eq + Clone,
-    Message: 'a + Clone,
-    Theme: 'a + Catalog,
-    Renderer: 'a + text::Renderer,
-{
-    fn from(
-        group: Group<'a, V, Message, Theme, Renderer>,
-    ) -> Element<'a, Message, Theme, Renderer> {
-        Element::new(group)
-    }
 }

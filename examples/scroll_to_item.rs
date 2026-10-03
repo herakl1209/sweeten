@@ -7,6 +7,8 @@
 //!
 //! Run with: `cargo run --example scroll_to_item`
 
+use iced::Widget;
+use iced::advanced::widget::operation;
 use iced::widget::scrollable::AbsoluteOffset;
 use iced::widget::{Id, container, scrollable, text};
 use iced::{Element, Fill, Task};
@@ -52,13 +54,15 @@ impl App {
                     .map(Message::ScrollResult);
             }
             Message::ScrollResult(Some(bounds)) => {
-                return iced::widget::operation::scroll_to(
-                    self.scrollable_id.clone(),
-                    AbsoluteOffset {
-                        x: None,
-                        y: Some(bounds.y),
-                    },
-                    iced::widget::operation::Animation::Instant,
+                return iced::advanced::widget::operate(
+                    operation::scrollable::scroll_to(
+                        self.scrollable_id.clone(),
+                        AbsoluteOffset {
+                            x: None,
+                            y: Some(bounds.y),
+                        },
+                        operation::Animation::Instant,
+                    ),
                 );
             }
             Message::ScrollResult(None) => {}
@@ -66,13 +70,13 @@ impl App {
         Task::none()
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    fn view(&self) -> impl Widget<Message> {
         let items = (0..ITEM_COUNT).map(|i| {
             container(text(format!("Item {i}")))
                 .style(container::rounded_box)
                 .padding(10)
                 .width(Fill)
-                .into()
+                .boxed()
         });
 
         let buttons: Vec<Element<'_, Message>> = [0, 10, 25, 50, 75, 99]
@@ -80,7 +84,7 @@ impl App {
             .map(|&i| {
                 button(text(format!("Item {i}")).size(12))
                     .on_press(Message::ScrollTo(i))
-                    .into()
+                    .boxed()
             })
             .collect();
 
@@ -97,6 +101,6 @@ impl App {
         .height(Fill)
         .width(Fill);
 
-        row![sidebar, content].spacing(10).padding(20).into()
+        row![sidebar, content].spacing(10).padding(20).boxed()
     }
 }

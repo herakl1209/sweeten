@@ -10,9 +10,9 @@
 //! [`FitText`]: sweeten::widget::fit_text::FitText
 
 use iced::widget::{center, column, container, row, slider, text};
-use iced::{Center, Element, Fill, Shrink};
+use iced::{Center, Fill, Shrink, Widget};
 
-use sweeten::widget::{fit_text, text_input};
+use sweeten::widget::{checkbox, fit_text, text_input};
 
 fn main() -> iced::Result {
     iced::application(App::default, App::update, App::view)
@@ -26,6 +26,7 @@ struct App {
     headline: String,
     max_size: f32,
     min_size: f32,
+    selectable: bool,
 }
 
 impl Default for App {
@@ -34,6 +35,7 @@ impl Default for App {
             headline: "Headline that fits".to_string(),
             max_size: 120.0,
             min_size: 16.0,
+            selectable: false,
         }
     }
 }
@@ -43,6 +45,7 @@ enum Message {
     EditHeadline(String),
     SetMax(f32),
     SetMin(f32),
+    ToggleSelectable(bool),
 }
 
 impl App {
@@ -61,15 +64,17 @@ impl App {
                     self.max_size = self.min_size;
                 }
             }
+            Message::ToggleSelectable(t) => self.selectable = t,
         }
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    fn view(&self) -> impl Widget<Message> {
         let headline = fit_text(&self.headline)
             .max_size(self.max_size)
             .min_size(self.min_size)
             .width(Fill)
             .height(Fill)
+            .selectable(self.selectable)
             .center();
 
         let stage = container(headline)
@@ -103,7 +108,11 @@ impl App {
         .spacing(12)
         .align_y(Center);
 
-        let controls = column![input, max_row, min_row]
+        let selectable_checkbox = checkbox(self.selectable)
+            .on_toggle(Message::ToggleSelectable)
+            .label("Selectable");
+
+        let controls = column![input, max_row, min_row, selectable_checkbox]
             .spacing(12)
             .width(Fill)
             .height(Shrink);
@@ -115,6 +124,5 @@ impl App {
                 .height(Fill),
         )
         .padding(20)
-        .into()
     }
 }

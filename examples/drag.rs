@@ -1,4 +1,5 @@
 use iced::Length::Fill;
+use iced::Widget;
 use iced::widget::{container, text};
 use iced::{Center, Element, Task};
 
@@ -72,7 +73,7 @@ impl App {
         }
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    fn view(&self) -> impl Widget<Message> {
         let items = self.elements.iter().copied().map(pickme);
         let drag: Element<'_, Message> = match self.mode {
             Mode::Column => column(items)
@@ -80,7 +81,7 @@ impl App {
                 .deadband_zone(0.0)
                 .on_drag(Message::Reorder)
                 .align_x(Center)
-                .into(),
+                .boxed(),
             Mode::Row => row(items)
                 .spacing(5)
                 .on_drag(Message::Reorder)
@@ -98,7 +99,7 @@ impl App {
                 })
                 .align_y(Center)
                 .wrap()
-                .into(),
+                .boxed(),
         };
 
         container(
@@ -122,7 +123,7 @@ impl App {
         )
         .padding(20)
         .center(Fill)
-        .into()
+        .boxed()
     }
 }
 
@@ -130,5 +131,5 @@ fn pickme(label: &str) -> Element<'_, Message> {
     container(text(label))
         .style(container::rounded_box)
         .padding(5)
-        .into()
+        .boxed()
 }

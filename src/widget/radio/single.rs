@@ -45,6 +45,8 @@
 //!     column![a, b, all].into()
 //! }
 //! ```
+use iced_core::widget::Meta;
+
 use crate::animation::cubic_bezier;
 use crate::core::alignment;
 use crate::core::animation::Easing;
@@ -58,8 +60,8 @@ use crate::core::widget;
 use crate::core::widget::tree::{self, Tree};
 use crate::core::window;
 use crate::core::{
-    Animation, Element, Event, Font, Layout, Length, Pixels, Rectangle, Shell,
-    Size, Widget,
+    Animation, Event, Font, Layout, Length, Pixels, Rectangle, Shell, Size,
+    Widget,
 };
 
 use super::dot;
@@ -241,7 +243,7 @@ where
 
 /// Internal state for the animated [`Single`].
 struct State<P: text::Paragraph> {
-    paragraph: widget::text::State<P>,
+    paragraph: text::paragraph::Plain<P>,
     animation: Animation<bool>,
     now: Option<Instant>,
     last_is_selected: bool,
@@ -251,6 +253,11 @@ struct State<P: text::Paragraph> {
     /// and dragging in (or pressing in and dragging out before release)
     /// must not fire.
     is_pressed: bool,
+}
+
+impl<'a, V, Message, Theme> Meta for Single<'a, V, Message, Theme> where
+    Theme: Catalog
+{
 }
 
 impl<V, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
@@ -266,7 +273,7 @@ where
 
     fn state(&self) -> tree::State {
         tree::State::new(State::<Renderer::Paragraph> {
-            paragraph: widget::text::State::default(),
+            paragraph: text::paragraph::Plain::default(),
             animation: Animation::new(self.is_selected)
                 .very_quick()
                 // cubic-bezier(0, 0, 0.2, 1) — Tailwind v4's
@@ -486,7 +493,9 @@ where
                 state.paragraph.raw(),
                 crate::text::Style {
                     color: style.text_color,
+                    selection: None,
                 },
+                theme.selection(),
                 viewport,
             );
         }
@@ -494,29 +503,26 @@ where
 
     fn operate(
         &mut self,
-        _tree: &mut Tree,
+        tree: &mut Tree,
         layout: Layout,
         _viewport: &Rectangle,
         _renderer: &Renderer,
         operation: &mut dyn widget::Operation,
     ) {
-        if let Some(label) = self.label.as_deref() {
-            operation.text(None, layout.bounds(), label);
+        if self.label.is_some() {
+            let state = tree.state.downcast_mut::<State<Renderer::Paragraph>>();
+            let mut children = layout.iter(&tree.children);
+            let _ = children.next();
+            let (label_layout, _) = children.next().unwrap();
+            operation.text(
+                None,
+                label_layout.bounds(),
+                &mut widget::text::Operand {
+                    paragraph: &mut state.paragraph,
+                    layout: label_layout,
+                    selectable: true,
+                },
+            );
         }
-    }
-}
-
-impl<'a, V, Message, Theme, Renderer> From<Single<'a, V, Message, Theme>>
-    for Element<'a, Message, Theme, Renderer>
-where
-    V: 'a + Clone,
-    Message: 'a,
-    Theme: 'a + Catalog,
-    Renderer: 'a + text::Renderer,
-{
-    fn from(
-        radio: Single<'a, V, Message, Theme>,
-    ) -> Element<'a, Message, Theme, Renderer> {
-        Element::new(radio)
     }
 }

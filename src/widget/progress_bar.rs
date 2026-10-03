@@ -41,11 +41,12 @@ use crate::core::layout;
 use crate::core::mouse;
 use crate::core::renderer;
 use crate::core::time::Instant;
+use crate::core::widget::Meta;
 use crate::core::widget::tree::{self, Tree};
 use crate::core::window;
 use crate::core::{
-    self, Animation, Background, Color, Element, Event, Layout, Length,
-    Rectangle, Shell, Size, Theme, Widget,
+    self, Animation, Background, Color, Event, Layout, Length, Rectangle,
+    Shell, Size, Theme, Widget,
 };
 
 use std::ops::RangeInclusive;
@@ -216,6 +217,11 @@ impl State {
     }
 }
 
+impl<'a, Message, Theme> Meta for ProgressBar<'a, Message, Theme> where
+    Theme: Catalog
+{
+}
+
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for ProgressBar<'_, Message, Theme>
 where
@@ -353,20 +359,6 @@ where
                 style.bar,
             );
         }
-    }
-}
-
-impl<'a, Message, Theme, Renderer> From<ProgressBar<'a, Message, Theme>>
-    for Element<'a, Message, Theme, Renderer>
-where
-    Message: 'a,
-    Theme: 'a + Catalog,
-    Renderer: 'a + core::Renderer,
-{
-    fn from(
-        progress_bar: ProgressBar<'a, Message, Theme>,
-    ) -> Element<'a, Message, Theme, Renderer> {
-        Element::new(progress_bar)
     }
 }
 

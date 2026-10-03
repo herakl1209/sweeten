@@ -1,4 +1,6 @@
 //! Build and show dropdown menus.
+use iced_core::widget::Meta;
+
 use crate::core::alignment;
 use crate::core::border::{self, Border};
 use crate::core::keyboard;
@@ -90,7 +92,7 @@ where
     T: Clone,
     Message: 'a,
     Theme: Catalog + 'a,
-    Renderer: text::Renderer + 'a,
+    Renderer: text::Renderer,
     'b: 'a,
 {
     /// Creates a new [`Menu`] with the given [`State`], some [`Options`],
@@ -322,14 +324,19 @@ impl Default for State {
     }
 }
 
-struct Overlay<'a, 'b, Message, Theme, Renderer>
+struct Overlay<'a, 'b, T, Message, Theme, Renderer>
 where
     Theme: Catalog,
     Renderer: text::Renderer,
 {
     position: Point,
     tree: &'a mut Tree,
-    list: Scrollable<'a, Message, Theme, Renderer>,
+    list: Scrollable<
+        'a,
+        Message,
+        List<'a, 'b, T, Message, Theme, Renderer>,
+        Theme,
+    >,
     id: Id,
     width: f32,
     menu_width: Option<Length>,
@@ -342,14 +349,16 @@ where
     list_layout: Layout,
 }
 
-impl<'a, 'b, Message, Theme, Renderer> Overlay<'a, 'b, Message, Theme, Renderer>
+impl<'a, 'b, T, Message, Theme, Renderer>
+    Overlay<'a, 'b, T, Message, Theme, Renderer>
 where
     Message: 'a,
-    Theme: Catalog + scrollable::Catalog + 'a,
+    Theme: Catalog + 'a,
     Renderer: text::Renderer + 'a,
+    T: Clone,
     'b: 'a,
 {
-    pub fn new<T>(
+    pub fn new(
         position: Point,
         menu: Menu<'a, 'b, T, Message, Theme, Renderer>,
         target_height: f32,
@@ -541,7 +550,7 @@ where
         })
         .height(menu_height);
 
-        state.tree.diff(&mut list as &mut dyn Widget<_, _, _>);
+        state.tree.diff::<_, _, Renderer>(&mut list);
 
         let mut overlay = Self {
             position,
@@ -563,10 +572,12 @@ where
     }
 }
 
-impl<'a, 'b, Message, Theme, Renderer> Overlay<'a, 'b, Message, Theme, Renderer>
+impl<'a, 'b, T, Message, Theme, Renderer>
+    Overlay<'a, 'b, T, Message, Theme, Renderer>
 where
+    T: Clone,
     Message: 'a,
-    Theme: Catalog + scrollable::Catalog + 'a,
+    Theme: Catalog + 'a,
     Renderer: text::Renderer + 'a,
     'b: 'a,
 {
@@ -679,9 +690,10 @@ where
     }
 }
 
-impl<Message, Theme, Renderer> crate::core::Overlay<Message, Theme, Renderer>
-    for Overlay<'_, '_, Message, Theme, Renderer>
+impl<T, Message, Theme, Renderer> crate::core::Overlay<Message, Theme, Renderer>
+    for Overlay<'_, '_, T, Message, Theme, Renderer>
 where
+    T: Clone,
     Theme: Catalog,
     Renderer: text::Renderer,
 {
@@ -1043,6 +1055,14 @@ where
     Size::new(max_width, tree.children[0].size.height + padding.y())
 }
 
+impl<'a, 'b, T, Message, Theme, Renderer> Meta
+    for List<'a, 'b, T, Message, Theme, Renderer>
+where
+    Theme: Catalog,
+    Renderer: text::Renderer,
+{
+}
+
 impl<T, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for List<'_, '_, T, Message, Theme, Renderer>
 where
@@ -1072,20 +1092,18 @@ where
             &mut self.rows,
             |tree, row| match &mut row.kind {
                 RowKind::Element(element) => {
-                    tree.children[0].diff(element.as_widget_mut());
+                    tree.children[0].diff(element);
                 }
                 RowKind::ElementRef(element) => {
-                    tree.children[0].diff(element.as_widget_mut());
+                    tree.children[0].diff(element);
                 }
                 _ => {}
             },
             |row| {
                 let mut tree = Tree::empty();
                 tree.children.push(match &row.kind {
-                    RowKind::Element(element) => Tree::new(element.as_widget()),
-                    RowKind::ElementRef(element) => {
-                        Tree::new(element.as_widget())
-                    }
+                    RowKind::Element(element) => Tree::new(element),
+                    RowKind::ElementRef(element) => Tree::new(element),
                     _ => Tree::empty(),
                 });
                 tree
@@ -1182,18 +1200,12 @@ where
                             RowKind::Title(title) => {
                                 measure(title, label_text_size)
                             }
-                            RowKind::Element(element) => element_width(
-                                element.as_widget_mut(),
-                                tree,
-                                renderer,
-                                loose,
-                            ),
-                            RowKind::ElementRef(element) => element_width(
-                                element.as_widget_mut(),
-                                tree,
-                                renderer,
-                                loose,
-                            ),
+                            RowKind::Element(element) => {
+                                element_width(element, tree, renderer, loose)
+                            }
+                            RowKind::ElementRef(element) => {
+                                element_width(element, tree, renderer, loose)
+                            }
                             RowKind::Divider => 0.0,
                         };
 
@@ -1216,20 +1228,10 @@ where
                 RowKind::Text(_) => Size::new(row_width, option_height),
                 RowKind::Title(_) => Size::new(row_width, label_height),
                 RowKind::Element(element) => element_row(
-                    element.as_widget_mut(),
-                    row_tree,
-                    renderer,
-                    row_width,
-                    inset,
-                    gutter,
+                    element, row_tree, renderer, row_width, inset, gutter,
                 ),
                 RowKind::ElementRef(element) => element_row(
-                    element.as_widget_mut(),
-                    row_tree,
-                    renderer,
-                    row_width,
-                    inset,
-                    gutter,
+                    element, row_tree, renderer, row_width, inset, gutter,
                 ),
                 RowKind::Divider => Size::new(row_width, divider_height),
             };
@@ -1631,7 +1633,7 @@ where
                         .next()
                         .map(|(layout, _)| layout)
                     {
-                        element.as_widget().draw(
+                        element.draw(
                             &tree.children[0],
                             renderer,
                             theme,
@@ -1648,7 +1650,7 @@ where
                         .next()
                         .map(|(layout, _)| layout)
                     {
-                        element.as_widget().draw(
+                        element.draw(
                             &tree.children[0],
                             renderer,
                             theme,
@@ -1683,21 +1685,6 @@ where
                 }
             }
         }
-    }
-}
-
-impl<'a, 'b, T, Message, Theme, Renderer>
-    From<List<'a, 'b, T, Message, Theme, Renderer>>
-    for Element<'a, Message, Theme, Renderer>
-where
-    T: Clone,
-    Message: 'a,
-    Theme: 'a + Catalog,
-    Renderer: 'a + text::Renderer,
-    'b: 'a,
-{
-    fn from(list: List<'a, 'b, T, Message, Theme, Renderer>) -> Self {
-        Element::new(list)
     }
 }
 

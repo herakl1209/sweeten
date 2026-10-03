@@ -12,7 +12,7 @@ use iced::widget::{
     center_x, center_y, checkbox, column, container, row, scrollable, slider,
     text, tooltip,
 };
-use iced::{Center, Element, Fill, Font, Right, Theme};
+use iced::{Center, Element, Fill, Font, Right, Theme, Widget};
 
 use sweeten::widget::table;
 use sweeten::widget::table::Style;
@@ -70,7 +70,7 @@ impl App {
         }
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    fn view(&self) -> impl Widget<Message> {
         let show_header = self.show_header;
         let header =
             |label: &'static str| show_header.then(|| bold_header(label));
@@ -92,7 +92,7 @@ impl App {
                 .align_x(Right)
                 .align_y(Center),
                 table::column(header("Price"), |event: &Event| {
-                    if event.price > 0.0 {
+                    (if event.price > 0.0 {
                         text!("${:.2}", event.price).style(
                             if event.price > 100.0 {
                                 text::warning
@@ -102,18 +102,21 @@ impl App {
                         )
                     } else {
                         text("Free").style(text::success).width(Fill).center()
-                    }
+                    })
+                    .boxed()
                 })
                 .align_x(Right)
                 .align_y(Center),
                 table::column(header("Rating"), |event: &Event| {
-                    text!("{:.2}", event.rating).style(if event.rating > 4.7 {
-                        text::success
-                    } else if event.rating < 2.0 {
-                        text::danger
-                    } else {
-                        text::default
-                    })
+                    text!("{:.2}", event.rating)
+                        .style(if event.rating > 4.7 {
+                            text::success
+                        } else if event.rating < 2.0 {
+                            text::danger
+                        } else {
+                            text::default
+                        })
+                        .boxed()
                 })
                 .align_x(Right)
                 .align_y(Center),
@@ -217,19 +220,16 @@ impl App {
             center_y(scrollable(center_x(table)).spacing(10)).padding(10),
             center_x(controls).padding(10).style(container::dark)
         ]
-        .into()
     }
 }
 
-fn bold_header<Message: 'static>(
-    label: &'static str,
-) -> Element<'static, Message> {
+fn bold_header<'a, Message: 'a>(label: &'static str) -> Element<'a, Message> {
     text(label)
         .font(Font {
             weight: font::Weight::Bold,
             ..Font::DEFAULT
         })
-        .into()
+        .boxed()
 }
 
 struct Event {

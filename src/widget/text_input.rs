@@ -43,8 +43,8 @@ use crate::core::widget::operation::{self, Focusable, Operation};
 use crate::core::widget::tree::{self, Tree};
 use crate::core::window;
 use crate::core::{
-    Background, Border, Color, Element, Event, Font, Layout, Length, Padding,
-    Pixels, Rectangle, Shell, Size, Theme, Widget,
+    Background, Border, Color, Event, Font, Layout, Length, Padding, Pixels,
+    Rectangle, Shell, Size, Theme, Widget,
 };
 
 /// A field that can be filled with text.
@@ -527,18 +527,9 @@ where
     }
 }
 
-impl<'a, Message, Theme, Renderer> From<TextInput<'a, Message, Theme>>
-    for Element<'a, Message, Theme, Renderer>
-where
-    Message: Clone + 'a,
-    Theme: Catalog + 'a,
-    Renderer: text::Renderer + 'static,
+impl<'a, Message, Theme> widget::Meta for TextInput<'a, Message, Theme> where
+    Theme: Catalog
 {
-    fn from(
-        text_input: TextInput<'a, Message, Theme>,
-    ) -> Element<'a, Message, Theme, Renderer> {
-        Element::new(text_input)
-    }
 }
 
 /// The state of a [`TextInput`].

@@ -137,7 +137,6 @@ use crate::overlay::menu::{self, Menu};
 
 use std::borrow::Borrow;
 use std::convert::Infallible;
-use std::f32;
 
 /// A widget for selecting a single value from a list of options.
 ///
@@ -572,6 +571,16 @@ where
     }
 }
 
+impl<T, V, Message, Theme, Renderer> widget::Meta
+    for PickList<'_, T, V, Message, Theme, Renderer>
+where
+    T: PartialEq + Clone,
+    V: Borrow<T>,
+    Theme: Catalog,
+    Renderer: text::Renderer,
+{
+}
+
 impl<'a, T, V, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for PickList<'a, T, V, Message, Theme, Renderer>
 where
@@ -718,11 +727,7 @@ where
                 ),
             );
 
-            element.as_widget_mut().layout(
-                &mut tree.children[0],
-                renderer,
-                &child_limits,
-            );
+            element.layout(&mut tree.children[0], renderer, &child_limits);
             let child_size = tree.children[0].size;
 
             let intrinsic = Size::new(
@@ -1107,7 +1112,7 @@ where
                         .map(|(layout, _)| layout),
                     tree.children.first(),
                 ) {
-                    element.as_widget().draw(
+                    element.draw(
                         child_tree,
                         renderer,
                         theme,
@@ -1254,21 +1259,6 @@ where
         } else {
             Vec::new()
         }
-    }
-}
-
-impl<'a, T, V, Message, Theme, Renderer>
-    From<PickList<'a, T, V, Message, Theme, Renderer>>
-    for Element<'a, Message, Theme, Renderer>
-where
-    T: Clone + PartialEq + 'a,
-    V: Borrow<T> + 'a,
-    Message: Clone + 'a,
-    Theme: Catalog + 'a,
-    Renderer: text::Renderer + 'a,
-{
-    fn from(pick_list: PickList<'a, T, V, Message, Theme, Renderer>) -> Self {
-        Self::new(pick_list)
     }
 }
 

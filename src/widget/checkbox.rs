@@ -34,6 +34,8 @@
 //! ![Checkbox drawn by `iced_wgpu`](https://github.com/iced-rs/iced/blob/7760618fb112074bc40b148944521f312152012a/docs/images/checkbox.png?raw=true)
 use std::marker::PhantomData;
 
+use iced_core::widget::Meta;
+
 use crate::animation::cubic_bezier;
 use crate::core::alignment;
 use crate::core::animation::Easing;
@@ -50,8 +52,8 @@ use crate::core::widget::operation;
 use crate::core::widget::tree::{self, Tree};
 use crate::core::window;
 use crate::core::{
-    Animation, Background, Border, Color, Element, Event, Font, Layout, Length,
-    Pixels, Rectangle, Shell, Size, Theme, Widget,
+    Animation, Background, Border, Color, Event, Font, Layout, Length, Pixels,
+    Rectangle, Shell, Size, Theme, Widget,
 };
 use crate::widget::focus;
 
@@ -291,7 +293,7 @@ where
 
 /// Internal state for the animated [`Checkbox`].
 struct State<P: text::Paragraph> {
-    paragraph: widget::text::State<P>,
+    paragraph: text::paragraph::Plain<P>,
     animation: Animation<bool>,
     now: Option<Instant>,
     last_is_checked: bool,
@@ -321,6 +323,14 @@ impl<P: text::Paragraph> operation::Focusable for State<P> {
     }
 }
 
+impl<'a, Message, Theme, Renderer> Meta
+    for Checkbox<'a, Message, Theme, Renderer>
+where
+    Theme: Catalog,
+    Renderer: text::Renderer,
+{
+}
+
 impl<Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for Checkbox<'_, Message, Theme, Renderer>
 where
@@ -334,7 +344,7 @@ where
 
     fn state(&self) -> tree::State {
         tree::State::new(State::<Renderer::Paragraph> {
-            paragraph: widget::text::State::default(),
+            paragraph: text::paragraph::Plain::default(),
             animation: Animation::new(self.is_checked)
                 .very_quick()
                 // cubic-bezier(0, 0, 0.2, 1) — Tailwind v4's
@@ -713,7 +723,9 @@ where
                 state.paragraph.raw(),
                 crate::text::Style {
                     color: style.text_color,
+                    selection: None,
                 },
+                theme.selection(),
                 viewport,
             );
         }
@@ -733,23 +745,20 @@ where
             operation.focusable(self.id.as_ref(), layout.bounds(), state);
         }
 
-        if let Some(label) = self.label.as_deref() {
-            operation.text(None, layout.bounds(), label);
+        if self.label.is_some() {
+            let mut children = layout.iter(&tree.children);
+            let _ = children.next();
+            let (label_layout, _) = children.next().unwrap();
+            operation.text(
+                None,
+                label_layout.bounds(),
+                &mut widget::text::Operand {
+                    paragraph: &mut state.paragraph,
+                    layout: label_layout,
+                    selectable: true,
+                },
+            );
         }
-    }
-}
-
-impl<'a, Message, Theme, Renderer> From<Checkbox<'a, Message, Theme, Renderer>>
-    for Element<'a, Message, Theme, Renderer>
-where
-    Message: 'a + Clone,
-    Theme: 'a + Catalog,
-    Renderer: 'a + text::Renderer,
-{
-    fn from(
-        checkbox: Checkbox<'a, Message, Theme, Renderer>,
-    ) -> Element<'a, Message, Theme, Renderer> {
-        Element::new(checkbox)
     }
 }
 
@@ -822,6 +831,11 @@ pub trait Catalog: Sized {
 
     /// The [`Style`] of a class with the given status.
     fn style(&self, class: &Self::Class<'_>, status: Status) -> Style;
+
+    /// The color used to highlight selected label text.
+    fn selection(&self) -> Color {
+        Color::TRANSPARENT
+    }
 }
 
 /// A styling function for a [`Checkbox`].
@@ -838,6 +852,10 @@ impl Catalog for Theme {
 
     fn style(&self, class: &Self::Class<'_>, status: Status) -> Style {
         class(self, status)
+    }
+
+    fn selection(&self) -> Color {
+        self.palette().background.strongest.color
     }
 }
 

@@ -2,9 +2,10 @@
 //!
 //! Run with: `cargo run --example mouse_area`
 
+use iced::Widget;
 use iced::keyboard;
 use iced::widget::{center, column, container, text};
-use iced::{Center, Element, Point};
+use iced::{Center, Point};
 
 use sweeten::mouse_area;
 
@@ -37,7 +38,7 @@ impl App {
         }
     }
 
-    fn view(&self) -> Element<'_, Message> {
+    fn view(&self) -> impl Widget<Message> {
         center(
             column![
                 mouse_area(
@@ -61,6 +62,6 @@ impl App {
             .align_x(Center),
         )
         .padding(10)
-        .into()
+        .boxed()
     }
 }

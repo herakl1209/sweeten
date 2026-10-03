@@ -1,7 +1,6 @@
 //! Helper functions to create widgets.
 
 use crate::core;
-use crate::core::Element;
 use crate::core::text;
 use crate::overlay::menu;
 use crate::widget::MouseArea;
@@ -30,7 +29,9 @@ macro_rules! column {
         $crate::widget::Column::new()
     );
     ($($x:expr),+ $(,)?) => (
-        $crate::widget::Column::with_children([$($crate::core::Element::from($x)),+])
+        $crate::widget::Column::with_children([$(
+            <_ as $crate::core::Widget<_, _, _>>::_boxed($x)
+        ),+])
     );
 }
 
@@ -43,28 +44,30 @@ macro_rules! row {
         $crate::widget::Row::new()
     );
     ($($x:expr),+ $(,)?) => (
-        $crate::widget::Row::with_children([$($crate::core::Element::from($x)),+])
+        $crate::widget::Row::with_children([$(
+            <_ as $crate::core::Widget<_, _, _>>::_boxed($x)
+        ),+])
     );
 }
 
 /// Creates a new [`Row`] with the given children.
-pub fn row<'a, Message, Theme, Renderer>(
-    children: impl IntoIterator<Item = Element<'a, Message, Theme, Renderer>>,
-) -> Row<'a, Message, Theme, Renderer>
+pub fn row<'a, Message, W, Theme>(
+    children: impl IntoIterator<Item = W>,
+) -> Row<'a, Message, W, Theme>
 where
-    Renderer: core::Renderer,
     Theme: row::Catalog,
+    W: core::widget::Meta,
 {
     Row::with_children(children)
 }
 
 /// Creates a new [`Column`] with the given children.
-pub fn column<'a, Message, Theme, Renderer>(
-    children: impl IntoIterator<Item = Element<'a, Message, Theme, Renderer>>,
-) -> Column<'a, Message, Theme, Renderer>
+pub fn column<'a, Message, W, Theme>(
+    children: impl IntoIterator<Item = W>,
+) -> Column<'a, Message, W, Theme>
 where
-    Renderer: core::Renderer,
     Theme: column::Catalog,
+    W: core::widget::Meta,
 {
     Column::with_children(children)
 }
@@ -77,11 +80,10 @@ where
 /// [`iced`'s `button`]: https://docs.iced.rs/iced/widget/button/index.html
 /// [`on_focus`]: Button::on_focus
 /// [`on_blur`]: Button::on_blur
-pub fn button<'a, Message, Theme, Renderer>(
-    content: impl Into<Element<'a, Message, Theme, Renderer>>,
-) -> Button<'a, Message, Theme, Renderer>
+pub fn button<'a, Message, W, Theme>(
+    content: W,
+) -> Button<'a, Message, W, Theme>
 where
-    Renderer: core::Renderer,
     Theme: button::Catalog,
 {
     Button::new(content)
@@ -113,7 +115,7 @@ where
 /// options via [`group`] and the [`options!`] macro, and arbitrary
 /// widgets as option content — the view function may return a `String`
 /// or anything else that converts into a [`Content`], like an
-/// [`Element`].
+/// [`Element`](crate::core::Element).
 ///
 /// [`iced`'s `pick_list`]: https://docs.iced.rs/iced/widget/pick_list/index.html
 /// [`disabled`]: PickList::disabled
@@ -143,12 +145,7 @@ where
 ///
 /// [`iced`'s `MouseArea`]: https://docs.iced.rs/iced/widget/struct.MouseArea.html
 /// [`Point`]: crate::core::Point
-pub fn mouse_area<'a, Message, Theme, Renderer>(
-    widget: impl Into<Element<'a, Message, Theme, Renderer>>,
-) -> MouseArea<'a, Message, Theme, Renderer>
-where
-    Renderer: core::Renderer,
-{
+pub fn mouse_area<'a, Message, W>(widget: W) -> MouseArea<'a, Message, W> {
     MouseArea::new(widget)
 }
 
@@ -156,15 +153,14 @@ where
 ///
 /// Columns can be created using [`table::column`], while rows can be any
 /// iterator over some data type `T`.
-pub fn table<'a, 'b, T, Message, Theme, Renderer>(
+pub fn table<'a, T, Message, Theme, Renderer>(
     columns: impl IntoIterator<
-        Item = table::Column<'a, 'b, T, Message, Theme, Renderer>,
+        Item = table::Column<'a, T, Message, Theme, Renderer>,
     >,
     rows: impl IntoIterator<Item = T>,
 ) -> Table<'a, Message, Theme, Renderer>
 where
     T: Clone,
-    Message: 'a,
     Theme: table::Catalog,
     Renderer: core::Renderer,
 {
@@ -175,12 +171,13 @@ where
 ///
 /// Only items visible in the current viewport are materialized into
 /// widgets, making this suitable for large or unbounded data sets.
-pub fn list<'a, T, Message, Theme, Renderer>(
+pub fn list<'a, T, W, Message, Theme, Renderer>(
     content: &'a list::Content<T>,
-    view_item: impl Fn(usize, &'a T) -> Element<'a, Message, Theme, Renderer> + 'a,
-) -> List<'a, T, Message, Theme, Renderer>
+    view_item: impl Fn(usize, &'a T) -> W + 'a,
+) -> List<'a, T, W>
 where
     Renderer: core::Renderer,
+    W: core::Widget<Message, Theme, Renderer> + 'a,
 {
     List::new(content, view_item)
 }
@@ -280,17 +277,18 @@ where
 }
 
 /// Creates a new [`Transition`] showing the given `value`, with `view` as the
-/// recipe for materializing an [`Element`] from any value of type `T`.
+/// recipe for materializing a widget from any value of type `T`.
 ///
 /// Whenever `value` changes (as detected by [`PartialEq`]), the widget
 /// animates a slide transition between the previous and new content.
-pub fn transition<'a, T, Message, Theme, Renderer>(
+pub fn transition<'a, T, Message, Theme, Renderer, W>(
     value: T,
-    view: impl Fn(&T) -> Element<'a, Message, Theme, Renderer> + 'a,
+    view: impl Fn(&T) -> W + 'a,
 ) -> Transition<'a, T, Message, Theme, Renderer>
 where
     T: Clone + PartialEq + 'static,
     Renderer: core::Renderer,
+    W: core::Widget<Message, Theme, Renderer> + 'a,
 {
     transition::Transition::new(value, view)
 }

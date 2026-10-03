@@ -5,6 +5,8 @@
 //! if every column is headerless the header row is skipped entirely.
 //!
 //! [`Table`]: https://docs.iced.rs/iced/widget/table/index.html
+use iced_core::widget::Meta;
+
 use crate::core;
 use crate::core::alignment;
 use crate::core::layout;
@@ -21,13 +23,12 @@ use crate::core::{
 ///
 /// Columns can be created using the [`column()`] function, while rows can be any
 /// iterator over some data type `T`.
-pub fn table<'a, 'b, T, Message, Theme, Renderer>(
-    columns: impl IntoIterator<Item = Column<'a, 'b, T, Message, Theme, Renderer>>,
+pub fn table<'a, T, Message, Theme, Renderer>(
+    columns: impl IntoIterator<Item = Column<'a, T, Message, Theme, Renderer>>,
     rows: impl IntoIterator<Item = T>,
 ) -> Table<'a, Message, Theme, Renderer>
 where
     T: Clone,
-    Message: 'a,
     Theme: Catalog,
     Renderer: core::Renderer,
 {
@@ -41,18 +42,20 @@ where
 /// header row is omitted from the layout.
 ///
 /// The view function will be called for each row in a [`Table`] and it must
-/// produce the resulting contents of a cell.
-pub fn column<'a, 'b, T, E, Message, Theme, Renderer>(
+/// produce the resulting contents of a cell. Each column may use a different
+/// widget type; return an [`Element`] from a column view when its cells need
+/// different widget types.
+pub fn column<'a, T, Message, Theme, Renderer, W>(
     header: Option<Element<'a, Message, Theme, Renderer>>,
-    view: impl Fn(T) -> E + 'b,
-) -> Column<'a, 'b, T, Message, Theme, Renderer>
+    view: impl Fn(T) -> W + 'a,
+) -> Column<'a, T, Message, Theme, Renderer>
 where
     T: 'a,
-    E: Into<Element<'a, Message, Theme, Renderer>>,
+    W: Widget<Message, Theme, Renderer> + 'a,
 {
     Column {
         header,
-        view: Box::new(move |data| view(data).into()),
+        view: Box::new(move |item| view(item)._boxed()),
         width: Length::Shrink,
         align_x: alignment::Horizontal::Left,
         align_y: alignment::Vertical::Top,
@@ -65,7 +68,7 @@ where
     Theme: Catalog,
 {
     columns: Vec<Column_>,
-    cells: Vec<Element<'a, Message, Theme, Renderer>>,
+    cells: Vec<Option<Element<'a, Message, Theme, Renderer>>>,
     width: Length,
     height: Length,
     padding_x: f32,
@@ -96,21 +99,18 @@ where
     ///
     /// Columns can be created using the [`column()`] function, while rows can be any
     /// iterator over some data type `T`.
-    pub fn new<'b, T>(
-        columns: impl IntoIterator<
-            Item = Column<'a, 'b, T, Message, Theme, Renderer>,
-        >,
+    pub fn new<T>(
+        columns: impl IntoIterator<Item = Column<'a, T, Message, Theme, Renderer>>,
         rows: impl IntoIterator<Item = T>,
     ) -> Self
     where
         T: Clone,
-        Message: 'a,
     {
         let columns = columns.into_iter();
         let rows = rows.into_iter();
 
         let mut width = Length::Shrink;
-        let mut height = Length::Shrink;
+        let height = Length::Shrink;
 
         let mut cells = Vec::with_capacity(
             columns.size_hint().0 * (1 + rows.size_hint().0),
@@ -140,26 +140,20 @@ where
 
         // If every column is headerless, skip the header row entirely so
         // the table starts with data at row 0. Otherwise, render the
-        // header row and fill any `None` slots with a zero-sized Space so
-        // the grid stays rectangular.
+        // header row and keep missing headers as empty widget slots so the
+        // grid stays rectangular.
         let has_header = headers.iter().any(Option::is_some);
 
         if has_header {
             for header in headers {
-                cells.push(
-                    header.unwrap_or_else(|| iced_widget::Space::new().into()),
-                );
+                cells.push(header);
             }
         }
 
         for row in rows {
             for view in &views {
                 let cell = view(row.clone());
-                let size = cell.as_widget().size();
-
-                height = height.stack(size.height);
-
-                cells.push(cell);
+                cells.push(Some(cell));
             }
         }
 
@@ -293,6 +287,13 @@ struct Metrics {
     rows: Vec<f32>,
 }
 
+impl<'a, Message, Theme, Renderer> Meta for Table<'a, Message, Theme, Renderer>
+where
+    Theme: Catalog,
+    Renderer: core::Renderer,
+{
+}
+
 impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for Table<'a, Message, Theme, Renderer>
 where
@@ -321,7 +322,7 @@ where
         tree.diff_children(&mut self.cells);
 
         for cell in &self.cells {
-            let size = cell.as_widget().size();
+            let size = cell.size();
             self.height = self.height.stack(size.height);
         }
     }
@@ -384,7 +385,7 @@ where
             let column = i % columns;
 
             let width = self.columns[column].width;
-            let size = cell.as_widget().size();
+            let size = cell.size();
 
             if column == 0 {
                 x = self.padding_x;
@@ -444,8 +445,7 @@ where
                 )
                 .width(Length::Shrink)
                 .height(Length::Shrink);
-                cell.as_widget_mut()
-                    .layout(state, renderer, &natural_limits);
+                cell.layout(state, renderer, &natural_limits);
                 let natural_size = state.size;
                 metrics.rows[row] = metrics.rows[row].max(natural_size.height);
                 // Only write the column metric when the column itself is
@@ -476,7 +476,7 @@ where
             .width(width)
             .height(Length::Shrink);
 
-            cell.as_widget_mut().layout(state, renderer, &limits);
+            cell.layout(state, renderer, &limits);
             let size = limits.resolve(width, Length::Shrink, state.size);
 
             metrics.columns[column] = metrics.columns[column].max(size.width);
@@ -519,7 +519,7 @@ where
             let row = i / columns;
             let column = i % columns;
 
-            let size = cell.as_widget().size();
+            let size = cell.size();
 
             let width = self.columns[column].width;
             let width_factor = width.fill_factor();
@@ -566,7 +566,7 @@ where
             )
             .width(width);
 
-            cell.as_widget_mut().layout(state, renderer, &limits);
+            cell.layout(state, renderer, &limits);
             let size = limits.resolve(
                 if let Length::Fixed(_) = width {
                     width
@@ -600,7 +600,7 @@ where
                     continue;
                 }
 
-                let cell_size = cell.as_widget().size();
+                let cell_size = cell.size();
                 let cell_fw = col.fill_width && cell_size.width.is_fill();
                 let cell_fh = col.fill_height && cell_size.height.is_fill();
 
@@ -628,7 +628,7 @@ where
                     limits = limits.width(col.width);
                 }
 
-                cell.as_widget_mut().layout(state, renderer, &limits);
+                cell.layout(state, renderer, &limits);
             }
         }
 
@@ -654,7 +654,7 @@ where
             } = &self.columns[column];
 
             let col = &self.columns[column];
-            let cell_size = self.cells[i].as_widget().size();
+            let cell_size = self.cells[i].size();
             let cell_fw = col.fill_width && cell_size.width.is_fill();
             let cell_fh = col.fill_height && cell_size.height.is_fill();
 
@@ -719,8 +719,7 @@ where
             .iter_mut()
             .zip(layout.iter_mut(&mut tree.children))
         {
-            cell.as_widget_mut()
-                .update(tree, event, layout, cursor, renderer, shell, viewport);
+            cell.update(tree, event, layout, cursor, renderer, shell, viewport);
         }
     }
 
@@ -783,7 +782,7 @@ where
             if sticky_active && i < num_columns {
                 continue;
             }
-            cell.as_widget().draw(
+            cell.draw(
                 state,
                 renderer,
                 theme,
@@ -946,7 +945,7 @@ where
                             if i >= num_columns {
                                 break;
                             }
-                            cell.as_widget().draw(
+                            cell.draw(
                                 state,
                                 renderer,
                                 theme,
@@ -1105,8 +1104,7 @@ where
             .iter()
             .zip(layout.iter(&tree.children))
             .map(|(cell, (layout, tree))| {
-                cell.as_widget()
-                    .mouse_interaction(tree, layout, cursor, viewport, renderer)
+                cell.mouse_interaction(tree, layout, cursor, viewport, renderer)
             })
             .max()
             .unwrap_or_default()
@@ -1125,8 +1123,7 @@ where
             .iter_mut()
             .zip(layout.iter_mut(&mut tree.children))
         {
-            cell.as_widget_mut()
-                .operate(state, layout, viewport, renderer, operation);
+            cell.operate(state, layout, viewport, renderer, operation);
         }
     }
 
@@ -1151,37 +1148,16 @@ where
     }
 }
 
-impl<'a, Message, Theme, Renderer> From<Table<'a, Message, Theme, Renderer>>
-    for Element<'a, Message, Theme, Renderer>
-where
-    Message: 'a,
-    Theme: Catalog + 'a,
-    Renderer: core::Renderer + 'a,
-{
-    fn from(table: Table<'a, Message, Theme, Renderer>) -> Self {
-        Element::new(table)
-    }
-}
-
 /// A vertical visualization of some data with an optional header.
-pub struct Column<
-    'a,
-    'b,
-    T,
-    Message,
-    Theme = crate::Theme,
-    Renderer = crate::Renderer,
-> {
+pub struct Column<'a, T, Message, Theme, Renderer> {
     header: Option<Element<'a, Message, Theme, Renderer>>,
-    view: Box<dyn Fn(T) -> Element<'a, Message, Theme, Renderer> + 'b>,
+    view: Box<dyn Fn(T) -> Element<'a, Message, Theme, Renderer> + 'a>,
     width: Length,
     align_x: alignment::Horizontal,
     align_y: alignment::Vertical,
 }
 
-impl<'a, 'b, T, Message, Theme, Renderer>
-    Column<'a, 'b, T, Message, Theme, Renderer>
-{
+impl<'a, T, Message, Theme, Renderer> Column<'a, T, Message, Theme, Renderer> {
     /// Sets the width of the [`Column`].
     pub fn width(mut self, width: impl Into<Length>) -> Self {
         self.width = width.into();

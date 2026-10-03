@@ -15,19 +15,19 @@
 //! struct State { phrase: String }
 //! enum Message {}
 //!
-//! fn view(state: &State) -> Element<'_, Message> {
+//! fn view(state: &State) -> impl iced::Widget<Message> {
 //!     transition::transition(state.phrase.clone(), |s: &String| {
-//!         text(s.clone()).size(24).into()
+//!         text(s.clone()).size(24)
 //!     })
 //!     .direction(Direction::Up)
-//!     .into()
 //! }
 //! ```
 //!
 //! The closure receives the current value (or, mid-animation, the previous
-//! value) and produces an [`Element`]. Because the produced [`Element`] must
-//! have lifetime `'a`, the closure body cannot borrow from its `&T` argument
-//! directly — clone the data inside the closure or use captures.
+//! value) and produces one widget type. Return an [`Element`] when different
+//! values need different widget types. The produced widget must have lifetime
+//! `'a`, so the closure body cannot borrow from its `&T` argument directly —
+//! clone the data inside the closure or use captures.
 
 use std::time::Duration;
 
@@ -38,6 +38,7 @@ use crate::core::mouse;
 use crate::core::overlay;
 use crate::core::renderer;
 use crate::core::time::Instant;
+use crate::core::widget::Meta;
 use crate::core::widget::Operation;
 use crate::core::widget::tree::{self, Tree};
 use crate::core::window;
@@ -273,23 +274,22 @@ where
     Renderer: crate::core::Renderer,
 {
     /// Creates a new [`Transition`] showing the given `value`, with `view` as
-    /// the recipe for materializing an [`Element`] from any value of type
-    /// `T`.
+    /// the recipe for materializing a widget from any value of type `T`.
     ///
     /// Whenever `value` changes between frames (as detected by [`PartialEq`]),
     /// the widget will animate a slide transition between the previous and
     /// new content.
     ///
-    /// The closure must produce an [`Element`] of lifetime `'a` — it cannot
-    /// borrow from its `&T` argument directly. Clone the data inside the
-    /// closure or use captures of lifetime `'a`.
-    pub fn new(
-        value: T,
-        view: impl Fn(&T) -> Element<'a, Message, Theme, Renderer> + 'a,
-    ) -> Self {
+    /// The closure must produce a widget of lifetime `'a` — it cannot borrow
+    /// from its `&T` argument directly. Clone the data inside the closure or
+    /// use captures of lifetime `'a`.
+    pub fn new<W>(value: T, view: impl Fn(&T) -> W + 'a) -> Self
+    where
+        W: Widget<Message, Theme, Renderer> + 'a,
+    {
         Self {
             value,
-            view: Box::new(view),
+            view: Box::new(move |value| view(value)._boxed()),
             mode: Mode::default(),
             duration: Duration::from_millis(200),
             easing: Easing::EaseOut,
@@ -455,6 +455,14 @@ impl<T> State<T> {
     }
 }
 
+impl<T, Message, Theme, Renderer> Meta
+    for Transition<'_, T, Message, Theme, Renderer>
+where
+    T: Clone + PartialEq + 'static,
+    Renderer: crate::core::Renderer,
+{
+}
+
 impl<'a, T, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for Transition<'a, T, Message, Theme, Renderer>
 where
@@ -470,7 +478,7 @@ where
         tree::State::new(State::<T> {
             current_value: self.value.clone(),
             previous_value: None,
-            current_tree: Tree::new(element.as_widget()),
+            current_tree: Tree::new(&element),
             previous_tree: Tree::empty(),
             current_layout: None,
             previous_layout: None,
@@ -500,7 +508,7 @@ where
             state.previous_layout = state.current_layout.take();
 
             let mut element = (self.view)(&state.current_value);
-            state.current_tree = Tree::new(element.as_widget());
+            state.current_tree = Tree::new(&element);
             state.current_tree.diff(&mut element);
 
             state.progress = Animation::new(0.0_f32)
@@ -548,7 +556,7 @@ where
         let limits = limits.width(width).height(height);
         let inner_limits = limits.shrink(self.padding).loose();
 
-        current_element.as_widget_mut().layout(
+        current_element.layout(
             &mut state.current_tree,
             renderer,
             &inner_limits,
@@ -561,7 +569,7 @@ where
             && let Some(prev_value) = state.previous_value.clone()
         {
             let mut prev_element = view(&prev_value);
-            prev_element.as_widget_mut().layout(
+            prev_element.layout(
                 &mut state.previous_tree,
                 renderer,
                 &inner_limits,
@@ -645,7 +653,7 @@ where
             .expect("just materialized above");
         if let Some(current_layout) = current_layout {
             let adjusted_cursor = translate_cursor(cursor, current_offset);
-            current_element.as_widget_mut().update(
+            current_element.update(
                 &mut state.current_tree,
                 event,
                 current_layout,
@@ -675,7 +683,7 @@ where
         let current_offset =
             current_offset(self.mode, self.padding, &layout, state);
         let adjusted_cursor = translate_cursor(cursor, current_offset);
-        current_element.as_widget().mouse_interaction(
+        current_element.mouse_interaction(
             &state.current_tree,
             current_layout,
             adjusted_cursor,
@@ -704,7 +712,7 @@ where
         let Some(current_layout) = current_layout else {
             return;
         };
-        current_element.as_widget_mut().operate(
+        current_element.operate(
             &mut state.current_tree,
             current_layout,
             viewport,
@@ -784,7 +792,7 @@ where
                 let prev_layout = Layout::new(*prev_node)
                     .move_to(content_area.position() + offset);
                 renderer.with_translation(prev_offset, |renderer| {
-                    prev_element.as_widget().draw(
+                    prev_element.draw(
                         &state.previous_tree,
                         renderer,
                         theme,
@@ -798,7 +806,7 @@ where
 
             if let Some(current_element) = self.current_element.as_ref() {
                 renderer.with_translation(cur_offset, |renderer| {
-                    current_element.as_widget().draw(
+                    current_element.draw(
                         &state.current_tree,
                         renderer,
                         theme,
@@ -832,7 +840,7 @@ where
         let Some(current_layout) = current_layout else {
             return vec![];
         };
-        element.as_widget_mut().overlay(
+        element.overlay(
             &mut state.current_tree,
             current_layout,
             renderer,
@@ -844,34 +852,19 @@ where
 }
 
 /// Creates a new [`Transition`] showing the given `value`, with `view` as the
-/// recipe for materializing an [`Element`] from any value of type `T`.
+/// recipe for materializing a widget from any value of type `T`.
 ///
 /// This is the helper-style alias of [`Transition::new`].
-pub fn transition<'a, T, Message, Theme, Renderer>(
+pub fn transition<'a, T, Message, Theme, Renderer, W>(
     value: T,
-    view: impl Fn(&T) -> Element<'a, Message, Theme, Renderer> + 'a,
+    view: impl Fn(&T) -> W + 'a,
 ) -> Transition<'a, T, Message, Theme, Renderer>
 where
     T: Clone + PartialEq + 'static,
     Renderer: crate::core::Renderer,
+    W: Widget<Message, Theme, Renderer> + 'a,
 {
     Transition::new(value, view)
-}
-
-impl<'a, T, Message, Theme, Renderer>
-    From<Transition<'a, T, Message, Theme, Renderer>>
-    for Element<'a, Message, Theme, Renderer>
-where
-    T: Clone + PartialEq + 'static,
-    Message: 'a,
-    Theme: 'a,
-    Renderer: crate::core::Renderer + 'a,
-{
-    fn from(
-        widget: Transition<'a, T, Message, Theme, Renderer>,
-    ) -> Element<'a, Message, Theme, Renderer> {
-        Element::new(widget)
-    }
 }
 
 impl std::fmt::Display for Direction {
